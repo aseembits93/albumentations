@@ -251,43 +251,50 @@ def resize_boxes_to_visible_area(
         return boxes
 
     # Extract box coordinates
-    x1 = boxes[:, 0].astype(int)
-    y1 = boxes[:, 1].astype(int)
-    x2 = boxes[:, 2].astype(int)
-    y2 = boxes[:, 3].astype(int)
+    x1 = boxes[:, 0].astype(np.int32)
+    y1 = boxes[:, 1].astype(np.int32)
+    x2 = boxes[:, 2].astype(np.int32)
+    y2 = boxes[:, 3].astype(np.int32)
 
-    # Process each box individually to avoid array shape issues
-    new_boxes: list[np.ndarray] = []
-
-    regions = [hole_mask[y1[i] : y2[i], x1[i] : x2[i]] for i in range(len(boxes))]
-    visible_areas = [1 - region for region in regions]
-
-    for i, (visible, box) in enumerate(zip(visible_areas, boxes)):
-        if not visible.any():
-            # Box is fully covered - handle directly
-            new_box = box.copy()
-
-            new_box[2:] = new_box[:2]  # collapse to point
-            new_boxes.append(new_box)
+    # Pre-allocate output array
+    new_boxes = boxes.copy()
+    
+    for i in range(len(boxes)):
+        # Get the region for this box
+        region = hole_mask[y1[i]:y2[i], x1[i]:x2[i]]
+        
+        # Check if region exists (box might be outside the image)
+        if region.size == 0:
+            new_boxes[i, 2:] = new_boxes[i, :2]  # collapse to point
             continue
-
-        # Find visible coordinates
-        y_visible = visible.any(axis=1)
-        x_visible = visible.any(axis=0)
-
-        y_coords = np.nonzero(y_visible)[0]
-        x_coords = np.nonzero(x_visible)[0]
-
-        # Create new box
-        new_box = boxes[i].copy()
-        new_box[0] = x1[i] + x_coords[0]  # x_min
-        new_box[1] = y1[i] + y_coords[0]  # y_min
-        new_box[2] = x1[i] + x_coords[-1] + 1  # x_max
-        new_box[3] = y1[i] + y_coords[-1] + 1  # y_max
-
-        new_boxes.append(new_box)
-
-    return np.array(new_boxes)
+            
+        # Use logical_not instead of 1 - region to avoid floating point operations
+        # and check if any visible parts exist in one operation
+        visible = np.logical_not(region)
+        
+        if not np.any(visible):
+            # Box is fully covered - collapse to point
+            new_boxes[i, 2:] = new_boxes[i, :2]
+            continue
+            
+        # Find visible coordinates more efficiently
+        y_visible = np.any(visible, axis=1)
+        x_visible = np.any(visible, axis=0)
+        
+        y_indices = np.where(y_visible)[0]
+        x_indices = np.where(x_visible)[0]
+        
+        # Only update the box if we found valid coordinates
+        if len(y_indices) > 0 and len(x_indices) > 0:
+            new_boxes[i, 0] = x1[i] + x_indices[0]      # x_min
+            new_boxes[i, 1] = y1[i] + y_indices[0]      # y_min
+            new_boxes[i, 2] = x1[i] + x_indices[-1] + 1  # x_max
+            new_boxes[i, 3] = y1[i] + y_indices[-1] + 1  # y_max
+        else:
+            # No valid coordinates found - collapse to point
+            new_boxes[i, 2:] = new_boxes[i, :2]
+    
+    return new_boxes
 
 
 def filter_bboxes_by_holes(
