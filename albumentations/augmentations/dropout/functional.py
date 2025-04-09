@@ -251,43 +251,43 @@ def resize_boxes_to_visible_area(
         return boxes
 
     # Extract box coordinates
-    x1 = boxes[:, 0].astype(int)
-    y1 = boxes[:, 1].astype(int)
-    x2 = boxes[:, 2].astype(int)
-    y2 = boxes[:, 3].astype(int)
+    x1 = boxes[:, 0].astype(np.int32)
+    y1 = boxes[:, 1].astype(np.int32)
+    x2 = boxes[:, 2].astype(np.int32)
+    y2 = boxes[:, 3].astype(np.int32)
 
-    # Process each box individually to avoid array shape issues
-    new_boxes: list[np.ndarray] = []
-
-    regions = [hole_mask[y1[i] : y2[i], x1[i] : x2[i]] for i in range(len(boxes))]
-    visible_areas = [1 - region for region in regions]
-
-    for i, (visible, box) in enumerate(zip(visible_areas, boxes)):
-        if not visible.any():
-            # Box is fully covered - handle directly
-            new_box = box.copy()
-
-            new_box[2:] = new_box[:2]  # collapse to point
-            new_boxes.append(new_box)
+    # Pre-allocate output array
+    new_boxes = boxes.copy()
+    
+    for i in range(len(boxes)):
+        region = hole_mask[y1[i]:y2[i], x1[i]:x2[i]]
+        
+        # Check if the region has any non-hole area (visible area)
+        if region.size == 0 or region.all():
+            # Box is fully covered or empty - collapse to point
+            new_boxes[i, 2:] = new_boxes[i, :2]
             continue
-
+        
+        # We need 1 - region, but we can avoid that by checking where region == 0
+        visible_y = np.any(region == 0, axis=1)
+        visible_x = np.any(region == 0, axis=0)
+        
+        if not visible_y.any() or not visible_x.any():
+            # No visible area in at least one dimension - collapse to point
+            new_boxes[i, 2:] = new_boxes[i, :2]
+            continue
+            
         # Find visible coordinates
-        y_visible = visible.any(axis=1)
-        x_visible = visible.any(axis=0)
-
-        y_coords = np.nonzero(y_visible)[0]
-        x_coords = np.nonzero(x_visible)[0]
-
-        # Create new box
-        new_box = boxes[i].copy()
-        new_box[0] = x1[i] + x_coords[0]  # x_min
-        new_box[1] = y1[i] + y_coords[0]  # y_min
-        new_box[2] = x1[i] + x_coords[-1] + 1  # x_max
-        new_box[3] = y1[i] + y_coords[-1] + 1  # y_max
-
-        new_boxes.append(new_box)
-
-    return np.array(new_boxes)
+        y_coords = np.where(visible_y)[0]
+        x_coords = np.where(visible_x)[0]
+        
+        # Update box coordinates
+        new_boxes[i, 0] = x1[i] + x_coords[0]       # x_min
+        new_boxes[i, 1] = y1[i] + y_coords[0]       # y_min
+        new_boxes[i, 2] = x1[i] + x_coords[-1] + 1  # x_max
+        new_boxes[i, 3] = y1[i] + y_coords[-1] + 1  # y_max
+        
+    return new_boxes
 
 
 def filter_bboxes_by_holes(
