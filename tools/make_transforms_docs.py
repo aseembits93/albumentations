@@ -25,11 +25,18 @@ def make_augmentation_docs_link(cls) -> str:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(help="Commands", dest="command")
-    subparsers.add_parser("make")
-    check_parser = subparsers.add_parser("check")
-    check_parser.add_argument("filepath", type=str, help="Path to a file that should be checked")
+    # Moving parser creation and setup to be done only once and using a global variable to store it
+    global parser
+
+    # Check if the parser is already created to avoid re-creation
+    if 'parser' not in globals():
+        parser = argparse.ArgumentParser()
+        subparsers = parser.add_subparsers(help="Commands", dest="command")
+        subparsers.add_parser("make")
+        check_parser = subparsers.add_parser("check")
+        check_parser.add_argument("filepath", type=str, help="Path to a file that should be checked")
+
+    # Directly returning the parsed arguments instead of creating parser setup every time
     return parser.parse_args()
 
 
