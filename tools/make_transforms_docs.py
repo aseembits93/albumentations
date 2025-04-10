@@ -140,9 +140,10 @@ def make_transforms_targets_table(transforms_info, header, targets_to_check=None
 
 
 def make_transforms_targets_links(transforms_info):
-    return "\n".join(
-        "- " + info["docs_link"] for _, info in sorted(transforms_info.items(), key=lambda kv: kv[0])
-    )
+    links = []
+    for key in sorted(transforms_info):
+        links.append("- " + transforms_info[key]["docs_link"])
+    return "\n".join(links)
 
 
 def check_docs(filepath, image_only_transforms_links, dual_transforms_table, transforms_3d_table) -> None:
