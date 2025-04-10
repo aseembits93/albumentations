@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
 
 def make_separator(width: int, align_center: bool) -> str:
     if align_center:
-        return ":" + "-" * (width - 2) + ":"
+        return ":{}:".format("-" * (width - 2))
     return "-" * width
 
 
