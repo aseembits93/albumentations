@@ -140,9 +140,16 @@ def make_transforms_targets_table(transforms_info, header, targets_to_check=None
 
 
 def make_transforms_targets_links(transforms_info):
-    return "\n".join(
-        "- " + info["docs_link"] for _, info in sorted(transforms_info.items(), key=lambda kv: kv[0])
-    )
+    # Sort the keys once and then access the dictionary directly
+    sorted_keys = sorted(transforms_info.keys())
+    result = []
+    
+    # Pre-allocate the list and append directly instead of using list comprehension
+    for key in sorted_keys:
+        result.append("- " + transforms_info[key]["docs_link"])
+    
+    # Join the list at the end
+    return "\n".join(result)
 
 
 def check_docs(filepath, image_only_transforms_links, dual_transforms_table, transforms_3d_table) -> None:
