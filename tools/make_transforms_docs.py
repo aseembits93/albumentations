@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 import re
+import albumentations
 
 sys.path.append("..")
 import albumentations
@@ -19,9 +20,8 @@ IGNORED_CLASSES = {
 
 
 def make_augmentation_docs_link(cls) -> str:
-    return (
-        f"[{cls.__name__}](https://explore.albumentations.ai/transform/{cls.__name__})"
-    )
+    # Use a formatted string directly to improve efficiency
+    return f"[{cls.__name__}](https://explore.albumentations.ai/transform/{cls.__name__})"
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,15 +47,13 @@ def is_deprecated(cls) -> bool:
     if not cls.__doc__:
         return False
 
-    # Split docstring into sections and look only at the first section (before Args:)
-    main_desc = cls.__doc__.split('Args:')[0]
-
-    # Check if there's a deprecation notice in the main description
-    return any(
-        "deprecated" in line.lower()
-        for line in main_desc.split('\n')
-        if line.strip()
-    )
+    # Use string operations directly without splitting for better performance
+    doc = cls.__doc__.lower()
+    args_index = doc.find('args:')
+    
+    # Check only relevant part of the docstring
+    main_desc = doc[:args_index] if args_index != -1 else doc
+    return "deprecated" in main_desc
 
 
 def get_image_only_transforms_info():
@@ -91,22 +89,23 @@ def get_dual_transforms_info():
 def get_3d_transforms_info():
     transforms_3d_info = {}
     members = inspect.getmembers(albumentations)
+
+    # Pre-fetch Transform3D attributes to reduce repeated lookups
+    transform3d_targets = getattr(albumentations.Transform3D, '_targets', ())
+
     for name, cls in members:
-        if (inspect.isclass(cls) and
-            issubclass(cls, albumentations.Transform3D) and
-            name not in IGNORED_CLASSES) and not is_deprecated(cls):
-
-            # Get targets from class or parent class if not defined
-            if hasattr(cls, '_targets'):
-                targets = cls._targets
-            else:
-                # Get from Transform3D base class
-                targets = albumentations.Transform3D._targets
-
+        if (
+            inspect.isclass(cls)
+            and issubclass(cls, albumentations.Transform3D)
+            and name not in IGNORED_CLASSES
+            and not is_deprecated(cls)
+        ):
+            targets = getattr(cls, '_targets', transform3d_targets)
             transforms_3d_info[name] = {
                 "targets": targets if isinstance(targets, tuple) else (targets,),
                 "docs_link": make_augmentation_docs_link(cls)
             }
+
     return transforms_3d_info
 
 
