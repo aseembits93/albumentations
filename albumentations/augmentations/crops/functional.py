@@ -31,16 +31,18 @@ def get_crop_coords(
     # See: https://github.com/albumentations-team/albumentations/pull/1080
     # We want range for coordinated to be [0, image_size], right side is included
 
-    height, width = image_shape[:2]
+    height, width = image_shape[0], image_shape[1]  # Direct indexing is faster than slicing
 
     # Clip crop dimensions to image dimensions
-    crop_height = min(crop_shape[0], height)
-    crop_width = min(crop_shape[1], width)
+    crop_height = crop_shape[0] if crop_shape[0] <= height else height
+    crop_width = crop_shape[1] if crop_shape[1] <= width else width
 
+    # Calculate all coordinates in one go to reduce operations
     y_min = int((height - crop_height + 1) * h_start)
-    y_max = y_min + crop_height
     x_min = int((width - crop_width + 1) * w_start)
+    y_max = y_min + crop_height
     x_max = x_min + crop_width
+    
     return x_min, y_min, x_max, y_max
 
 
