@@ -74,29 +74,26 @@ def pad_3d_with_params(
         For each dimension, the first value is padding at the start (smaller indices),
         and the second value is padding at the end (larger indices).
     """
+    # Unpack padding tuple
     depth_front, depth_back, height_top, height_bottom, width_left, width_right = padding
 
-    # Skip if no padding is needed
-    if all(p == 0 for p in padding):
+    # Early return if no padding is needed
+    if padding == (0, 0, 0, 0, 0, 0):
         return volume
 
-    # Handle both 3D and 4D arrays
+    # Construct pad_width list
     pad_width = [
-        (depth_front, depth_back),  # depth (z) padding
-        (height_top, height_bottom),  # height (y) padding
-        (width_left, width_right),  # width (x) padding
+        (depth_front, depth_back),       # depth (z) padding
+        (height_top, height_bottom),     # height (y) padding
+        (width_left, width_right),       # width (x) padding
     ]
 
-    # Add channel padding if 4D array
+    # If the volume has a channel dimension, append (0, 0) for channels
     if volume.ndim == NUM_VOLUME_DIMENSIONS:
-        pad_width.append((0, 0))  # no padding for channels
+        pad_width.append((0, 0))
 
-    return np.pad(
-        volume,
-        pad_width=pad_width,
-        mode="constant",
-        constant_values=value,
-    )
+    # Use np.pad to pad the volume with the specified parameters
+    return np.pad(volume, pad_width=pad_width, mode="constant", constant_values=value)
 
 
 def crop3d(
