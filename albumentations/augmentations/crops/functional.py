@@ -123,14 +123,27 @@ def crop_keypoints_by_coords(
 
 
 def get_center_crop_coords(image_shape: tuple[int, int], crop_shape: tuple[int, int]) -> tuple[int, int, int, int]:
-    height, width = image_shape[:2]
-    crop_height, crop_width = crop_shape[:2]
+    # Get first two dimensions directly without slicing when possible
+    try:
+        height, width = image_shape
+    except ValueError:
+        height, width = image_shape[:2]
+        
+    try:
+        crop_height, crop_width = crop_shape
+    except ValueError:
+        crop_height, crop_width = crop_shape[:2]
 
+    # Calculate coordinates with minimal operations
     y_min = (height - crop_height) // 2
-    y_max = y_min + crop_height
     x_min = (width - crop_width) // 2
+    
+    # Use addition instead of separate calculations
+    y_max = y_min + crop_height
     x_max = x_min + crop_width
-    return x_min, y_min, x_max, y_max
+    
+    # Pre-construct tuple to return
+    return (x_min, y_min, x_max, y_max)
 
 
 def crop(img: np.ndarray, x_min: int, y_min: int, x_max: int, y_max: int) -> np.ndarray:
