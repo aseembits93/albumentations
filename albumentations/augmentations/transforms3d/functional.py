@@ -74,23 +74,19 @@ def pad_3d_with_params(
         For each dimension, the first value is padding at the start (smaller indices),
         and the second value is padding at the end (larger indices).
     """
-    depth_front, depth_back, height_top, height_bottom, width_left, width_right = padding
-
-    # Skip if no padding is needed
-    if all(p == 0 for p in padding):
+    # Fast path: Check if any padding is needed - use direct indexing instead of all()
+    if padding[0] == 0 and padding[1] == 0 and padding[2] == 0 and padding[3] == 0 and padding[4] == 0 and padding[5] == 0:
         return volume
 
-    # Handle both 3D and 4D arrays
-    pad_width = [
-        (depth_front, depth_back),  # depth (z) padding
-        (height_top, height_bottom),  # height (y) padding
-        (width_left, width_right),  # width (x) padding
-    ]
-
-    # Add channel padding if 4D array
+    # Create pad_width directly based on volume dimensions
     if volume.ndim == NUM_VOLUME_DIMENSIONS:
-        pad_width.append((0, 0))  # no padding for channels
+        # 4D array case (with channels)
+        pad_width = ((padding[0], padding[1]), (padding[2], padding[3]), (padding[4], padding[5]), (0, 0))
+    else:
+        # 3D array case
+        pad_width = ((padding[0], padding[1]), (padding[2], padding[3]), (padding[4], padding[5]))
 
+    # Use np.pad with pre-created pad_width
     return np.pad(
         volume,
         pad_width=pad_width,
