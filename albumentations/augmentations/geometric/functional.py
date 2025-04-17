@@ -332,7 +332,23 @@ def perspective(
     keep_size: bool,
     interpolation: int,
 ) -> np.ndarray:
-    if not keep_size:
+    height, width = img.shape[:2]
+    if keep_size:
+        # Calculate the scale matrix once
+        scale_x = width / max_width
+        scale_y = height / max_height
+        scale_matrix = np.array([[scale_x, 0, 0], [0, scale_y, 0], [0, 0, 1]])
+        matrix = np.dot(scale_matrix, matrix)  # Calculate adjusted matrix
+
+        perspective_func = cv2.warpPerspective(
+            img,
+            matrix,
+            (width, height),
+            borderMode=border_mode,
+            borderValue=border_val,
+            flags=interpolation,
+        )
+    else:
         perspective_func = maybe_process_in_chunks(
             cv2.warpPerspective,
             M=matrix,
@@ -340,25 +356,9 @@ def perspective(
             borderMode=border_mode,
             borderValue=border_val,
             flags=interpolation,
-        )
-    else:
-        height, width = img.shape[:2]
+        )(img)
 
-        scale_x = width / max_width
-        scale_y = height / max_height
-        scale_matrix = np.array([[scale_x, 0, 0], [0, scale_y, 0], [0, 0, 1]])
-        adjusted_matrix = np.dot(scale_matrix, matrix)
-
-        perspective_func = maybe_process_in_chunks(
-            cv2.warpPerspective,
-            M=adjusted_matrix,
-            dsize=(width, height),
-            borderMode=border_mode,
-            borderValue=border_val,
-            flags=interpolation,
-        )
-
-    return perspective_func(img)
+    return perspective_func
 
 
 @handle_empty_array("bboxes")
