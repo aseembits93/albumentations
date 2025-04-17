@@ -186,17 +186,10 @@ def crop(img: np.ndarray, x_min: int, y_min: int, x_max: int, y_max: int) -> np.
 
     """
     height, width = img.shape[:2]
-    if x_max <= x_min or y_max <= y_min:
+    if not (0 <= x_min < x_max <= width and 0 <= y_min < y_max <= height):
         raise ValueError(
-            "We should have x_min < x_max and y_min < y_max. But we got"
-            f" (x_min = {x_min}, y_min = {y_min}, x_max = {x_max}, y_max = {y_max})",
-        )
-
-    if x_min < 0 or x_max > width or y_min < 0 or y_max > height:
-        raise ValueError(
-            "Values for crop should be non negative and equal or smaller than image sizes"
-            f"(x_min = {x_min}, y_min = {y_min}, x_max = {x_max}, y_max = {y_max}, "
-            f"height = {height}, width = {width})",
+            "Invalid crop coordinates: (x_min = {x_min}, y_min = {y_min}, "
+            "x_max = {x_max}, y_max = {y_max}, height = {height}, width = {width})"
         )
 
     return img[y_min:y_max, x_min:x_max]
