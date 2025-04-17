@@ -48,21 +48,20 @@ def get_crop_coords(
         tuple[int, int, int, int]: Crop coordinates.
 
     """
-    # h_start is [0, 1) and should map to [0, (height - crop_height)]  (note inclusive)
-    # This is conceptually equivalent to mapping onto `range(0, (height - crop_height + 1))`
-    # See: https://github.com/albumentations-team/albumentations/pull/1080
-    # We want range for coordinated to be [0, image_size], right side is included
-
     height, width = image_shape[:2]
 
-    # Clip crop dimensions to image dimensions
-    crop_height = min(crop_shape[0], height)
-    crop_width = min(crop_shape[1], width)
+    crop_height = crop_shape[0] if crop_shape[0] <= height else height
+    crop_width = crop_shape[1] if crop_shape[1] <= width else width
 
-    y_min = int((height - crop_height + 1) * h_start)
+    max_y_start = height - crop_height + 1
+    max_x_start = width - crop_width + 1
+
+    y_min = int(max_y_start * h_start)
+    x_min = int(max_x_start * w_start)
+
     y_max = y_min + crop_height
-    x_min = int((width - crop_width + 1) * w_start)
     x_max = x_min + crop_width
+
     return x_min, y_min, x_max, y_max
 
 
