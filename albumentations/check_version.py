@@ -120,15 +120,27 @@ def parse_version_parts(version_str: str) -> tuple[int | str, ...]:
 
     """
     parts = []
-    # First split by dots
     for part in version_str.split("."):
-        # Then parse each part for numbers and letters
-        segments = re.findall(r"([0-9]+|[a-zA-Z]+)", part)
-        for segment in segments:
-            if segment.isdigit():
-                parts.append(int(segment))
+        i = 0
+        n = len(part)
+        while i < n:
+            # Start parsing digits
+            if part[i].isdigit():
+                j = i+1
+                while j < n and part[j].isdigit():
+                    j += 1
+                parts.append(int(part[i:j]))
+                i = j
+            # Start parsing letters
+            elif part[i].isalpha():
+                j = i+1
+                while j < n and part[j].isalpha():
+                    j += 1
+                parts.append(part[i:j].lower())
+                i = j
             else:
-                parts.append(segment.lower())
+                # skip any unexpected characters (should not happen in well-formed input)
+                i += 1
     return tuple(parts)
 
 
