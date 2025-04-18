@@ -194,18 +194,14 @@ def check_range_bounds(
         if value is None:
             return None
 
-        min_op = (lambda x, y: x >= y) if min_inclusive else (lambda x, y: x > y)
-        max_op = (lambda x, y: x <= y) if max_inclusive else (lambda x, y: x < y)
-
+        min_op, max_op = (lambda x: x >= min_val, lambda x: x <= max_val) if min_inclusive else (lambda x: x > min_val, lambda x: x < max_val)
         if max_val is None:
-            if not all(min_op(x, min_val) for x in value):
-                op_symbol = ">=" if min_inclusive else ">"
-                raise ValueError(f"All values in {value} must be {op_symbol} {min_val}")
+            if any(not min_op(x) for x in value):
+                raise ValueError(f"All values in {value} must be {'>=' if min_inclusive else '>'} {min_val}")
         else:
-            min_symbol = ">=" if min_inclusive else ">"
-            max_symbol = "<=" if max_inclusive else "<"
-            if not all(min_op(x, min_val) and max_op(x, max_val) for x in value):
-                raise ValueError(f"All values in {value} must be {min_symbol} {min_val} and {max_symbol} {max_val}")
+            if any(not min_op(x) or not max_op(x) for x in value):
+                raise ValueError(f"All values in {value} must be {'>=' if min_inclusive else '>'} {min_val} and {'<=' if max_inclusive else '<'} {max_val}")
+            
         return value
 
     return validator
