@@ -10,7 +10,7 @@ and simplify common operations across different augmentation transforms.
 from __future__ import annotations
 
 import functools
-from functools import wraps
+from functools import lru_cache, wraps
 from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
 
 import cv2
@@ -23,6 +23,7 @@ from albucore.utils import (
 from typing_extensions import Concatenate, ParamSpec
 
 from albumentations.core.keypoints_utils import angle_to_2pi_range
+from pathlib import Path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -51,7 +52,7 @@ def read_bgr_image(path: str | Path) -> np.ndarray:
         np.ndarray: Image in BGR format as a numpy array.
 
     """
-    return cv2.imread(str(path), cv2.IMREAD_COLOR)
+    return _cached_read_bgr_image(path).copy()
 
 
 def read_rgb_image(path: str | Path) -> np.ndarray:
@@ -67,7 +68,7 @@ def read_rgb_image(path: str | Path) -> np.ndarray:
         np.ndarray: Image in RGB format as a numpy array.
 
     """
-    image = read_bgr_image(path)
+    image = _cached_read_bgr_image(path)
     return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
 
@@ -247,3 +248,17 @@ def handle_empty_array(param_name: str) -> Callable[[F], F]:
         return cast("F", wrapper)
 
     return decorator
+
+
+@lru_cache(maxsize=128)
+def _cached_read_bgr_image(path: str | Path) -> np.ndarray:
+    """Read an image in BGR format from the specified path with caching.
+
+    Args:
+        path (str | Path): Path to the image file.
+
+    Returns:
+        np.ndarray: Image in BGR format as a numpy array.
+
+    """
+    return cv2.imread(str(path), cv2.IMREAD_COLOR)
