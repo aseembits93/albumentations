@@ -220,11 +220,12 @@ class PCA:
             raise ValueError(
                 "This PCA instance is not fitted yet. Call 'fit' with appropriate arguments before using this method.",
             )
-        total_variance = np.sum(self.explained_variance_)
+        total_variance = self.explained_variance_.sum()
         return self.explained_variance_ / total_variance
 
     def cumulative_explained_variance_ratio(self) -> np.ndarray:
-        return np.cumsum(self.explained_variance_ratio())
+        explained_variance_ratio = self.explained_variance_ratio()
+        return explained_variance_ratio.cumsum()
 
 
 def handle_empty_array(param_name: str) -> Callable[[F], F]:
