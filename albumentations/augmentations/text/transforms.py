@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Tuple, Union, Annotated, Any, Literal
 
 import numpy as np
 from pydantic import AfterValidator
@@ -93,12 +93,12 @@ class TextImage(ImageOnlyTransform):
 
     def __init__(
         self,
-        font_path: str | Path,
-        stopwords: tuple[str, ...] = ("the", "is", "in", "at", "of"),
-        augmentations: tuple[Literal["insertion", "swap", "deletion"] | None, ...] = (None,),
-        fraction_range: tuple[float, float] = (1.0, 1.0),
-        font_size_fraction_range: tuple[float, float] = (0.8, 0.9),
-        font_color: tuple[float, ...] = (0, 0, 0),  # black in RGB
+        font_path: Union[str, Path],
+        stopwords: Tuple[str, ...] = ("the", "is", "in", "at", "of"),
+        augmentations: Tuple[Literal["insertion", "swap", "deletion"] | None, ...] = (None,),
+        fraction_range: Tuple[float, float] = (1.0, 1.0),
+        font_size_fraction_range: Tuple[float, float] = (0.8, 0.9),
+        font_color: Tuple[float, ...] = (0, 0, 0),  # black in RGB
         clear_bg: bool = False,
         metadata_key: str = "textimage_metadata",
         p: float = 0.5,
@@ -108,10 +108,11 @@ class TextImage(ImageOnlyTransform):
         self.font_path = font_path
         self.fraction_range = fraction_range
         self.stopwords = stopwords
-        self.augmentations = list(augmentations)
+        self.augmentations = augmentations
         self.font_size_fraction_range = font_size_fraction_range
         self.font_color = font_color
         self.clear_bg = clear_bg
+        self.py_random = None
 
     @property
     def targets_as_params(self) -> list[str]:
@@ -143,20 +144,22 @@ class TextImage(ImageOnlyTransform):
             ValueError: If an invalid choice is provided
 
         """
-        words = [word for word in text.strip().split() if word]
+        # Optimization: .split() with no argument already strips and splits on whitespace,
+        # and never returns empty strings. So the list-comp filter is redundant and removed.
+        words = text.strip().split()
         num_words = len(words)
         num_words_to_modify = max(1, int(fraction * num_words))
 
         if choice == "insertion":
-            result_sentence = ftext.insert_random_stopwords(words, num_words_to_modify, self.stopwords, self.py_random)
+            result_sentence = insert_random_stopwords(words, num_words_to_modify, self.stopwords, self.py_random)
         elif choice == "swap":
-            result_sentence = ftext.swap_random_words(words, num_words_to_modify, self.py_random)
+            result_sentence = swap_random_words(words, num_words_to_modify, self.py_random)
         elif choice == "deletion":
-            result_sentence = ftext.delete_random_words(words, num_words_to_modify, self.py_random)
+            result_sentence = delete_random_words(words, num_words_to_modify, self.py_random)
         else:
             raise ValueError("Invalid choice. Choose from 'insertion', 'swap', or 'deletion'.")
 
-        result_sentence = re.sub(" +", " ", result_sentence).strip()
+        result_sentence = re.sub(r"\s+", " ", result_sentence).strip()
         return result_sentence if result_sentence != text else ""
 
     def preprocess_metadata(
