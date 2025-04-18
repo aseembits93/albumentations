@@ -376,32 +376,63 @@ def perspective(
         np.ndarray: Perspective-transformed image.
 
     """
+    # Ensure input matrix is float32 for OpenCV speed and memory
+    M = np.asarray(matrix, dtype=np.float32)
+    img_shape = img.shape
+    # fastest path: keep_size == False: use exactly as given
     if not keep_size:
+        # Avoid extra wrapper for small arrays
+        if img.size < 1_000_000:
+            return cv2.warpPerspective(
+                img, M,
+                (max_width, max_height),
+                flags=interpolation,
+                borderMode=border_mode,
+                borderValue=border_val,
+            )
+        # fallback to chunk processing for very large arrays
         perspective_func = maybe_process_in_chunks(
             cv2.warpPerspective,
-            M=matrix,
+            M=M,
             dsize=(max_width, max_height),
             borderMode=border_mode,
             borderValue=border_val,
             flags=interpolation,
         )
-    else:
-        height, width = img.shape[:2]
+        return perspective_func(img)
 
+    # keep_size == True
+    height, width = img_shape[:2]
+
+    # Precompute scaling only if necessary
+    if width != max_width or height != max_height:
         scale_x = width / max_width
         scale_y = height / max_height
-        scale_matrix = np.array([[scale_x, 0, 0], [0, scale_y, 0], [0, 0, 1]])
-        adjusted_matrix = np.dot(scale_matrix, matrix)
+        # In-place scaling matrix for efficiency
+        scale_matrix = np.array([[scale_x, 0, 0], [0, scale_y, 0], [0, 0, 1]], dtype=np.float32)
+        # matrix multiplication in float32
+        adjusted_matrix = np.dot(scale_matrix, M)
+    else:
+        # No resize needed, just use M
+        adjusted_matrix = M
 
-        perspective_func = maybe_process_in_chunks(
-            cv2.warpPerspective,
-            M=adjusted_matrix,
-            dsize=(width, height),
+    # Directly call cv2 for small/medium; chunked for large
+    if img.size < 1_000_000:
+        return cv2.warpPerspective(
+            img, adjusted_matrix,
+            (width, height),
+            flags=interpolation,
             borderMode=border_mode,
             borderValue=border_val,
-            flags=interpolation,
         )
-
+    perspective_func = maybe_process_in_chunks(
+        cv2.warpPerspective,
+        M=adjusted_matrix,
+        dsize=(width, height),
+        borderMode=border_mode,
+        borderValue=border_val,
+        flags=interpolation,
+    )
     return perspective_func(img)
 
 
