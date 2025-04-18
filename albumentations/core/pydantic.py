@@ -30,8 +30,10 @@ def nondecreasing(value: tuple[Number, Number]) -> tuple[Number, Number]:
         ValueError: If the first value is greater than the second value.
 
     """
-    if not value[0] <= value[1]:
-        raise ValueError(f"First value should be less than the second value, got {value} instead")
+    a, b = value
+    if a > b:
+        # Use a static error message to avoid expensive f-string on error path
+        raise ValueError("First value should be less than the second value")
     return value
 
 
