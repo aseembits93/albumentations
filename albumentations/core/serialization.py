@@ -194,11 +194,19 @@ def serialize_enum(obj: Any) -> Any:
     """Recursively search for Enum objects and convert them to their value.
     Also handle any Mapping or Sequence types.
     """
-    if isinstance(obj, Mapping):
-        return {k: serialize_enum(v) for k, v in obj.items()}
-    if isinstance(obj, Sequence) and not isinstance(obj, str):  # exclude strings since they're also sequences
-        return [serialize_enum(v) for v in obj]
-    return obj.value if isinstance(obj, Enum) else obj
+    # Local reference to avoid a global lookup inside the tight recursion loop
+    _serialize = serialize_enum
+
+    if isinstance(obj, Enum):                      # ---- fast path
+        return obj.value
+
+    if isinstance(obj, Mapping):                   # ---- dict‑like containers
+        return {k: _serialize(v) for k, v in obj.items()}
+
+    if isinstance(obj, (list, tuple, set)):        # ---- iterable containers
+        return [_serialize(v) for v in obj]
+
+    return obj                                     # ---- primitives / unknowns
 
 
 def save(
