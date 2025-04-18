@@ -195,7 +195,7 @@ class BaseDistortion(DualTransform):
             np.ndarray: Distorted image.
 
         """
-        return fgeometric.remap(
+        return fast_remap(
             img,
             map_x,
             map_y,
@@ -3627,3 +3627,32 @@ class SquareSymmetry(D4):
         # The resulting image will be one of the 8 possible square symmetry transformations of the input
 
     """
+
+
+def fast_remap(
+    img: np.ndarray,
+    map_x: np.ndarray,
+    map_y: np.ndarray,
+    interpolation: int,
+    border_mode: int,
+    value: tuple[float, ...] | float | None = None,
+) -> np.ndarray:
+    """
+    Fast remap implementation using direct call to cv2.remap.
+    Assumes img has shape (H, W) or (H, W, C).
+    """
+    # OpenCV remap requires F-contiguous map arrays, avoid copying if possible
+    map_x = np.ascontiguousarray(map_x, dtype=np.float32)
+    map_y = np.ascontiguousarray(map_y, dtype=np.float32)
+    map_xy = None  # Not used when passing map1/map2 separately.
+
+    if value is None:
+        border_value = 0
+    else:
+        border_value = value
+    # We call cv2.remap directly, no chunking or extra indirection.
+    result = cv2.remap(img, map_x, map_y, interpolation, borderMode=border_mode, borderValue=border_value)
+    # Ensure output shape consistent with input if mono channel was passed
+    if img.ndim == 3 and result.ndim == 2:
+        result = result[..., np.newaxis]
+    return result
