@@ -174,6 +174,7 @@ def check_range(value: tuple[float, float], lower_bound: float, upper_bound: flo
 
 
 class PCA:
+
     def __init__(self, n_components: int | None = None) -> None:
         if n_components is not None and n_components <= 0:
             raise ValueError("Number of components must be greater than zero.")
@@ -181,6 +182,10 @@ class PCA:
         self.mean: np.ndarray | None = None
         self.components_: np.ndarray | None = None
         self.explained_variance_: np.ndarray | None = None
+
+        # Caches
+        self._explained_variance_ratio_: np.ndarray | None = None
+        self._cumulative_explained_variance_ratio_: np.ndarray | None = None
 
     def fit(self, x: np.ndarray) -> None:
         x = x.astype(np.float64, copy=False)  # avoid unnecessary copy if already float64
@@ -216,15 +221,56 @@ class PCA:
         return cv2.PCABackProject(x, self.mean, self.components_)
 
     def explained_variance_ratio(self) -> np.ndarray:
-        if self.explained_variance_ is None:
-            raise ValueError(
-                "This PCA instance is not fitted yet. Call 'fit' with appropriate arguments before using this method.",
-            )
-        total_variance = np.sum(self.explained_variance_)
-        return self.explained_variance_ / total_variance
+        """
+        Return the variance ratio for each principal component.
+
+        The result is cached to avoid recomputation on subsequent calls.
+        """
+        self._check_is_fitted()
+
+        if self._explained_variance_ratio_ is None:
+            total_variance = float(self.explained_variance_.sum())
+            # Using ndarray.sum() is a bit faster than np.sum for one‑dim data.
+            self._explained_variance_ratio_ = self.explained_variance_ / total_variance
+
+        # No copy is returned – identical behaviour to the original code.
+        return self._explained_variance_ratio_
 
     def cumulative_explained_variance_ratio(self) -> np.ndarray:
-        return np.cumsum(self.explained_variance_ratio())
+        """
+        Return the cumulative explained variance ratio.
+
+        This uses one pass over the data instead of invoking
+        `explained_variance_ratio()` (thus summing only once) and is cached
+        for later calls.
+        """
+        self._check_is_fitted()
+
+        if self._cumulative_explained_variance_ratio_ is None:
+            total_variance = float(self.explained_variance_.sum())
+            cumsum = np.cumsum(self.explained_variance_)
+            self._cumulative_explained_variance_ratio_ = cumsum / total_variance
+
+        return self._cumulative_explained_variance_ratio_
+
+    # --------------------------------------------------------------------- #
+    # Private helpers
+    # --------------------------------------------------------------------- #
+    def _check_is_fitted(self) -> None:
+        if self.explained_variance_ is None:
+            raise ValueError(
+                "This PCA instance is not fitted yet. Call 'fit' with appropriate "
+                "arguments before using this method.",
+            )
+
+    # Whenever external code sets explained_variance_ directly the caches must be
+    # invalidated.  Overriding __setattr__ is a cheap universal way.
+    def __setattr__(self, name, value):  # noqa: D401  (simple method override)
+        if name == "explained_variance_":
+            # Invalidate caches
+            super().__setattr__("_explained_variance_ratio_", None)
+            super().__setattr__("_cumulative_explained_variance_ratio_", None)
+        super().__setattr__(name, value)
 
 
 def handle_empty_array(param_name: str) -> Callable[[F], F]:
