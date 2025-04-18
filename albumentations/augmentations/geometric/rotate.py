@@ -453,31 +453,40 @@ class Rotate(DualTransform):
             Rotate image and crop out black borders: https://stackoverflow.com/questions/16702966/rotate-image-and-crop-out-black-borders
 
         """
-        angle = math.radians(angle)
-        width_is_longer = width >= height
-        side_long, side_short = (width, height) if width_is_longer else (height, width)
+        # Convert angle to radians
+        angle_rad = math.radians(angle)
+        sin_a = abs(math.sin(angle_rad))
+        cos_a = abs(math.cos(angle_rad))
 
-        # since the solutions for angle, -angle and 180-angle are all the same,
+        # Check if width is longer than height
+        if width >= height:
+            side_long, side_short = width, height
+        else:
+            side_long, side_short = height, width
+
+        # Since the solutions for angle, -angle and 180-angle are all the same,
         # it is sufficient to look at the first quadrant and the absolute values of sin,cos:
-        sin_a, cos_a = abs(math.sin(angle)), abs(math.cos(angle))
         if side_short <= 2.0 * sin_a * cos_a * side_long or abs(sin_a - cos_a) < SMALL_NUMBER:
             # half constrained case: two crop corners touch the longer side,
             # the other two corners are on the mid-line parallel to the longer line
             x = 0.5 * side_short
-            wr, hr = (x / sin_a, x / cos_a) if width_is_longer else (x / cos_a, x / sin_a)
+            if width >= height:
+                wr = x / sin_a
+                hr = x / cos_a
+            else:
+                wr = x / cos_a
+                hr = x / sin_a
         else:
             # fully constrained case: crop touches all 4 sides
             cos_2a = cos_a * cos_a - sin_a * sin_a
-            wr, hr = (
-                (width * cos_a - height * sin_a) / cos_2a,
-                (height * cos_a - width * sin_a) / cos_2a,
-            )
+            wr = (width * cos_a - height * sin_a) / cos_2a
+            hr = (height * cos_a - width * sin_a) / cos_2a
 
         return {
-            "x_min": max(0, int(width / 2 - wr / 2)),
-            "x_max": min(width, int(width / 2 + wr / 2)),
-            "y_min": max(0, int(height / 2 - hr / 2)),
-            "y_max": min(height, int(height / 2 + hr / 2)),
+            "x_min": max(0, int(width * 0.5 - wr * 0.5)),
+            "x_max": min(width, int(width * 0.5 + wr * 0.5)),
+            "y_min": max(0, int(height * 0.5 - hr * 0.5)),
+            "y_max": min(height, int(height * 0.5 + hr * 0.5)),
         }
 
     def get_params_dependent_on_data(
