@@ -2658,15 +2658,28 @@ class GridElasticDeform(DualTransform):
         ] = cv2.INTER_NEAREST,
         p: float = 1.0,
     ):
+        # Tuple-initialize for speed and type safety, avoid repeated tuple coercion
         super().__init__(p=p)
-        self.num_grid_xy = num_grid_xy
-        self.magnitude = magnitude
+        self.num_grid_xy = (int(num_grid_xy[0]), int(num_grid_xy[1]))
+        self.magnitude = int(magnitude)
         self.interpolation = interpolation
         self.mask_interpolation = mask_interpolation
 
     @staticmethod
     def _generate_mesh(polygons: np.ndarray, dimensions: np.ndarray) -> np.ndarray:
-        return np.hstack((dimensions.reshape(-1, 4), polygons))
+        """
+        Efficiently hstack the reshaped dimensions and polygons, avoiding unnecessary copies.
+        Assumes dimensions is a flat array (size divisible by 4).
+        """
+        # If dimensions is already (N,4), do nothing; else reshape without copy
+        if dimensions.ndim == 2 and dimensions.shape[1] == 4:
+            dims_reshaped = dimensions
+        else:
+            dims_reshaped = dimensions.reshape(-1, 4)
+
+        # Use np.concatenate instead of np.hstack for clearer axis, same perf
+        # Both inputs should be contiguous and of compatible dtypes for best performance
+        return np.concatenate((dims_reshaped, polygons), axis=1)
 
     def get_params_dependent_on_data(
         self,
