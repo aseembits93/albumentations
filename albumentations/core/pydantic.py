@@ -147,7 +147,9 @@ def repeat_if_scalar(value: tuple[float, float] | float) -> tuple[float, float]:
         tuple[float, float]: If input is scalar, returns (value, value), otherwise returns input unchanged.
 
     """
-    return (value, value) if isinstance(value, (int, float)) else value
+    if isinstance(value, float) or isinstance(value, int):
+        return (value, value)
+    return value
 
 
 T = TypeVar("T", int, float)
