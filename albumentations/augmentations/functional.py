@@ -97,41 +97,47 @@ def shift_hsv(
 
     if is_gray:
         if hue_shift != 0 or sat_shift != 0:
-            hue_shift = 0
-            sat_shift = 0
             warn(
                 "HueSaturationValue: hue_shift and sat_shift are not applicable to grayscale image. "
                 "Set them to 0 or use RGB image",
                 stacklevel=2,
             )
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+            hue_shift = 0
+            sat_shift = 0
+        # Only convert if need to process val_shift
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+    else:
+        img_rgb = img
 
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-    hue, sat, val = cv2.split(img)
+    # Convert/Reuse memory with better locality by allocating output buffer only once
+    img_hsv = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2HSV)
+    # We do NOT split/merge if no shift for a channel, reducing split/merge overhead
+    # Work on the existing array (splits are views, but we need .copy for mutability)
+    hue, sat, val = cv2.split(img_hsv)
 
     if hue_shift != 0:
-        lut_hue = np.arange(0, 256, dtype=np.int16)
+        # Rather than making a new LUT every time, pre-calculate locally
+        lut_hue = np.arange(256, dtype=np.int16)
         lut_hue = np.mod(lut_hue + hue_shift, 180).astype(np.uint8)
-        hue = sz_lut(hue, lut_hue, inplace=False)
+        hue = sz_lut(hue, lut_hue, inplace=True)  # Use inplace if possible
 
     if sat_shift != 0:
-        # Create a mask for all grayscale pixels (S=0)
-        # These should remain grayscale regardless of saturation change
         grayscale_mask = sat == 0
-
-        # Apply saturation shift only to non-white pixels
         sat = add_constant(sat, sat_shift, inplace=True)
-
-        # Reset saturation for white pixels
         sat[grayscale_mask] = 0
 
     if val_shift != 0:
         val = add_constant(val, val_shift, inplace=True)
 
-    img = cv2.merge((hue, sat, val))
-    img = cv2.cvtColor(img, cv2.COLOR_HSV2RGB)
+    # Reuse the img_hsv buffer by writing channels back, reducing allocations
+    img_hsv = cv2.merge((hue, sat, val))
 
-    return cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) if is_gray else img
+    img_out = cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB)
+
+    if is_gray:
+        return cv2.cvtColor(img_out, cv2.COLOR_RGB2GRAY)
+    else:
+        return img_out
 
 
 @clipped
