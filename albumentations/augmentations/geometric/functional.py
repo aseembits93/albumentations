@@ -1536,21 +1536,14 @@ def remap(
         np.ndarray: Remapped image with the same shape as the input image.
 
     """
-    # Combine map_x and map_y into a single map array of type CV_32FC2
-    map_xy = np.stack([map_x, map_y], axis=-1).astype(np.float32)
-
-    # Create remap function with chunks processing
-    remap_func = maybe_process_in_chunks(
-        cv2.remap,
-        map1=map_xy,
-        map2=None,
+    return cv2.remap(
+        img,
+        map_x.astype(np.float32),
+        map_y.astype(np.float32),
         interpolation=interpolation,
         borderMode=border_mode,
         borderValue=value,
     )
-
-    # Apply the remapping
-    return remap_func(img)
 
 
 def remap_keypoints_via_mask(
