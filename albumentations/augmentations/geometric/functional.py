@@ -137,24 +137,24 @@ def bboxes_d4(
         ValueError: If an invalid group member is specified.
 
     """
-    transformations = {
-        "e": lambda x: x,  # Identity transformation
-        "r90": lambda x: bboxes_rot90(x, 1),  # Rotate 90 degrees
-        "r180": lambda x: bboxes_rot90(x, 2),  # Rotate 180 degrees
-        "r270": lambda x: bboxes_rot90(x, 3),  # Rotate 270 degrees
-        "v": lambda x: bboxes_vflip(x),  # Vertical flip
-        "hvt": lambda x: bboxes_transpose(
-            bboxes_rot90(x, 2),
-        ),  # Reflect over anti-diagonal
-        "h": lambda x: bboxes_hflip(x),  # Horizontal flip
-        "t": lambda x: bboxes_transpose(x),  # Transpose (reflect over main diagonal)
-    }
-
-    # Execute the appropriate transformation
-    if group_member in transformations:
-        return transformations[group_member](bboxes)
-
-    raise ValueError(f"Invalid group member: {group_member}")
+    if group_member == "e":  # Identity transformation
+        return bboxes
+    elif group_member == "r90":  # Rotate 90 degrees
+        return bboxes_rot90(bboxes, 1)
+    elif group_member == "r180":  # Rotate 180 degrees
+        return bboxes_rot90(bboxes, ROT90_180_FACTOR)
+    elif group_member == "r270":  # Rotate 270 degrees
+        return bboxes_rot90(bboxes, ROT90_270_FACTOR)
+    elif group_member == "v":  # Vertical flip
+        return bboxes_vflip(bboxes)
+    elif group_member == "hvt":  # Reflect over anti-diagonal
+        return bboxes_transpose(bboxes_rot90(bboxes, ROT90_180_FACTOR))
+    elif group_member == "h":  # Horizontal flip
+        return bboxes_hflip(bboxes)
+    elif group_member == "t":  # Transpose (reflect over main diagonal)
+        return bboxes_transpose(bboxes)
+    else:
+        raise ValueError(f"Invalid group member: {group_member}")
 
 
 @handle_empty_array("keypoints")
