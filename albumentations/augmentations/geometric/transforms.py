@@ -2666,7 +2666,11 @@ class GridElasticDeform(DualTransform):
 
     @staticmethod
     def _generate_mesh(polygons: np.ndarray, dimensions: np.ndarray) -> np.ndarray:
-        return np.hstack((dimensions.reshape(-1, 4), polygons))
+        """
+        Optimized version to generate the mesh by using more efficient numpy operations.
+        """
+        # Use np.concatenate instead of np.hstack for better performance with large arrays
+        return np.concatenate((dimensions.reshape(-1, 4), polygons), axis=1)
 
     def get_params_dependent_on_data(
         self,
