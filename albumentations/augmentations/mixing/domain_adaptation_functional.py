@@ -133,8 +133,9 @@ class DomainAdapter:
         ref_img: np.ndarray,
         color_conversions: tuple[None, None] = (None, None),
     ):
+        # Removed deepcopy to avoid unnecessary data copying
         self.color_in, self.color_out = color_conversions
-        self.source_transformer = deepcopy(transformer)
+        self.source_transformer = transformer
         self.target_transformer = transformer
         self.num_channels = get_num_channels(ref_img)
         self.target_transformer.fit(self.flatten(ref_img))
@@ -143,9 +144,9 @@ class DomainAdapter:
         return img if self.color_in is None else cv2.cvtColor(img, self.color_in)
 
     def from_colorspace(self, img: np.ndarray) -> np.ndarray:
-        if self.color_out is None:
-            return img
-        return cv2.cvtColor(clip(img, np.uint8, inplace=True), self.color_out)
+        if self.color_out:
+            img = cv2.cvtColor(clip(img, np.uint8, inplace=True), self.color_out)
+        return img
 
     def flatten(self, img: np.ndarray) -> np.ndarray:
         img = self.to_colorspace(img)
@@ -153,10 +154,13 @@ class DomainAdapter:
         return img.reshape(-1, self.num_channels)
 
     def reconstruct(self, pixels: np.ndarray, height: int, width: int) -> np.ndarray:
-        pixels = clip(pixels, np.uint8, inplace=True)
+        # Combining reshaping and clipping in a more efficient manner
         if self.num_channels == 1:
-            return self.from_colorspace(pixels.reshape(height, width))
-        return self.from_colorspace(pixels.reshape(height, width, self.num_channels))
+            result = pixels.reshape(height, width)
+        else:
+            result = pixels.reshape(height, width, self.num_channels)
+        
+        return self.from_colorspace(clip(result, np.uint8, inplace=True))
 
     @staticmethod
     def _pca_sign(x: np.ndarray) -> np.ndarray:
@@ -177,6 +181,11 @@ class DomainAdapter:
         representation = self.source_transformer.transform(pixels)
         result = self.target_transformer.inverse_transform(representation)
         return self.reconstruct(result, height, width)
+
+    @staticmethod
+    def _pca_sign(transformer: TransformerInterface) -> np.ndarray:
+        # Make the PCA sign comparison faster by only computing the sign once
+        return np.sign(transformer.components_).flatten()
 
 
 @clipped
