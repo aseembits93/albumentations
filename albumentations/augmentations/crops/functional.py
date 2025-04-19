@@ -101,25 +101,31 @@ def crop_bboxes_by_coords(
     if not bboxes.size:
         return bboxes
 
-    # Convert to absolute coordinates if needed
+    x_min, y_min, x_max, y_max = crop_coords
+
     if normalized_input:
-        cropped_bboxes = denormalize_bboxes(bboxes.copy().astype(np.float32), image_shape)
+        # Single copy + denormalize → float64
+        cropped = denormalize_bboxes(bboxes, image_shape)
     else:
-        cropped_bboxes = bboxes.copy().astype(np.float32)
+        # Single copy to float32
+        cropped = np.array(bboxes, dtype=np.float32)
 
-    x_min, y_min = crop_coords[:2]
+    # Shift coordinates by the top-left of the crop
+    cropped[:, 0] -= x_min
+    cropped[:, 2] -= x_min
+    cropped[:, 1] -= y_min
+    cropped[:, 3] -= y_min
 
-    # Subtract crop coordinates
-    cropped_bboxes[:, [0, 2]] -= x_min
-    cropped_bboxes[:, [1, 3]] -= y_min
-
-    # Calculate crop shape
-    crop_height = crop_coords[3] - crop_coords[1]
-    crop_width = crop_coords[2] - crop_coords[0]
+    # New crop size
+    crop_height = y_max - y_min
+    crop_width = x_max - x_min
     crop_shape = (crop_height, crop_width)
 
-    # Return in same format as input
-    return normalize_bboxes(cropped_bboxes, crop_shape) if normalized_input else cropped_bboxes
+    if normalized_input:
+        # Normalize back to [0,1] on float64
+        return normalize_bboxes(cropped, crop_shape)
+    else:
+        return cropped
 
 
 @handle_empty_array("keypoints")

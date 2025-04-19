@@ -15,7 +15,8 @@ from typing import Any, Literal
 import numpy as np
 
 from albumentations.augmentations.utils import handle_empty_array
-from albumentations.core.type_definitions import MONO_CHANNEL_DIMENSIONS, NUM_BBOXES_COLUMNS_IN_ALBUMENTATIONS
+from albumentations.core.type_definitions import (
+    MONO_CHANNEL_DIMENSIONS, NUM_BBOXES_COLUMNS_IN_ALBUMENTATIONS)
 
 from .utils import DataProcessor, Params, ShapeType
 
@@ -410,14 +411,20 @@ def normalize_bboxes(bboxes: np.ndarray, shape: ShapeType | tuple[int, int]) -> 
         np.ndarray: Normalized bounding boxes `[(x_min, y_min, x_max, y_max, ...)]`.
 
     """
+    # Extract height (rows) and width (cols)
     if isinstance(shape, tuple):
         rows, cols = shape[:2]
     else:
         rows, cols = shape["height"], shape["width"]
 
-    normalized = bboxes.copy().astype(float)
-    normalized[:, [0, 2]] /= cols
-    normalized[:, [1, 3]] /= rows
+    # Make a float64 copy once
+    normalized = bboxes.astype(float, copy=True)
+    # Scale only the first 4 coordinates
+    normalized[:, 0] /= cols
+    normalized[:, 2] /= cols
+    normalized[:, 1] /= rows
+    normalized[:, 3] /= rows
+
     return normalized
 
 
@@ -436,10 +443,22 @@ def denormalize_bboxes(
         np.ndarray: Denormalized bounding boxes `[(x_min, y_min, x_max, y_max, ...)]`.
 
     """
-    scale_factors = (shape[1], shape[0]) if isinstance(shape, tuple) else (shape["width"], shape["height"])
+    # Determine scale factors
+    if isinstance(shape, tuple):
+        height, width = shape[:2]
+        scale_x, scale_y = width, height
+    else:
+        scale_x, scale_y = shape["width"], shape["height"]
 
-    # Vectorized scaling of bbox coordinates
-    return bboxes * np.array([*scale_factors, *scale_factors, *[1] * (bboxes.shape[1] - 4)], dtype=float)
+    # Make a float64 copy once
+    coords = bboxes.astype(float, copy=True)
+    # Scale only the first 4 coordinates
+    coords[:, 0] *= scale_x
+    coords[:, 2] *= scale_x
+    coords[:, 1] *= scale_y
+    coords[:, 3] *= scale_y
+
+    return coords
 
 
 def calculate_bbox_areas_in_pixels(bboxes: np.ndarray, shape: ShapeType) -> np.ndarray:
