@@ -15,7 +15,8 @@ from typing import Any, Literal
 import numpy as np
 
 from albumentations.augmentations.utils import handle_empty_array
-from albumentations.core.type_definitions import MONO_CHANNEL_DIMENSIONS, NUM_BBOXES_COLUMNS_IN_ALBUMENTATIONS
+from albumentations.core.type_definitions import (
+    MONO_CHANNEL_DIMENSIONS, NUM_BBOXES_COLUMNS_IN_ALBUMENTATIONS)
 
 from .utils import DataProcessor, Params, ShapeType
 
@@ -415,10 +416,10 @@ def normalize_bboxes(bboxes: np.ndarray, shape: ShapeType | tuple[int, int]) -> 
     else:
         rows, cols = shape["height"], shape["width"]
 
-    normalized = bboxes.copy().astype(float)
-    normalized[:, [0, 2]] /= cols
-    normalized[:, [1, 3]] /= rows
-    return normalized
+    bboxes = bboxes.astype(float)
+    bboxes[:, [0, 2]] /= cols
+    bboxes[:, [1, 3]] /= rows
+    return bboxes
 
 
 @handle_empty_array("bboxes")
