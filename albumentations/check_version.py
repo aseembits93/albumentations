@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import urllib.request
 from urllib.request import OpenerDirector
 from warnings import warn
@@ -35,9 +36,34 @@ def get_opener() -> OpenerDirector:
 
     """
     global opener  # noqa: PLW0603
-    if opener is None:
-        opener = urllib.request.build_opener(urllib.request.HTTPHandler(), urllib.request.HTTPSHandler())
-    return opener
+    # Get the current module object from sys.modules using its name
+    current_module = sys.modules[__name__]
+
+    # --- First call initialization ---
+    # This block executes only on the very first call to the original get_opener function object.
+
+    # Create the opener instance. This involves some initial setup overhead
+    # which is acceptable as it only happens once.
+    created_opener = urllib.request.build_opener(urllib.request.HTTPHandler(), urllib.request.HTTPSHandler())
+
+    # Store the newly created instance in the global variable 'opener'.
+    # This global variable will be the source of truth for the singleton instance,
+    # directly accessed by the replacement lambda on subsequent calls.
+    opener = created_opener
+
+    # --- Optimization for subsequent calls ---
+    # Replace the 'get_opener' attribute in the current module's dictionary
+    # with a lambda function that simply returns the value currently stored
+    # in the global 'opener' variable.
+    # This replacement makes subsequent calls significantly faster because
+    # they bypass the original function's conditional logic (checking if opener is None)
+    # and jump instructions. The lambda is a minimal function body executing
+    # just a global load and a return.
+    # We use direct assignment to replace the function object in the module's namespace.
+    current_module.get_opener = lambda: opener # type: ignore[method-assign] # Ignore type checker warning about assigning lambda to a function type
+
+    # Return the created opener instance from the current (first) call.
+    return created_opener
 
 
 def fetch_version_info() -> str:
