@@ -92,15 +92,12 @@ class BasicTransform(Serializable, metaclass=CombinedMeta):
     def __init__(self, p: float = 0.5):
         self.p = p
         self._additional_targets: dict[str, str] = {}
-        self.params: dict[Any, Any] = {}
         self._key2func = {}
         self._set_keys()
         self.processors: dict[str, BboxProcessor | KeypointsProcessor] = {}
         self.seed: int | None = None
         self.random_generator = np.random.default_rng(self.seed)
-        self.py_random = random.Random(self.seed)
         self._strict = False  # Use private attribute
-        self.invalid_args: list[str] = []  # Store invalid args found during init
 
     @property
     def strict(self) -> bool:
@@ -538,6 +535,16 @@ class BasicTransform(Serializable, metaclass=CombinedMeta):
 
         return state
 
+    @property
+    def params(self) -> dict[Any, Any]:
+        if not hasattr(self, '_params'):
+            self._params = {}
+        return self._params
+
+    def apply_placeholder(self, img: np.ndarray, params: dict[Any, Any]) -> np.ndarray:
+        """Placeholder function for apply method, to be overridden in subclasses."""
+        return img
+
 
 class DualTransform(BasicTransform):
     """A base class for transformations that should be applied both to an image and its corresponding properties
@@ -703,7 +710,7 @@ class DualTransform(BasicTransform):
             np.ndarray: Transformed mask.
 
         """
-        return self.apply(mask, *args, **params)
+        return self.apply(mask, params)
 
     def apply_to_masks(self, masks: np.ndarray, *args: Any, **params: Any) -> np.ndarray:
         """Apply transform to multiple masks.
