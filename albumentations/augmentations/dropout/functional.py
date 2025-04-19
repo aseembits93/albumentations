@@ -627,30 +627,58 @@ def label(mask: np.ndarray, return_num: bool = False, connectivity: int = 2) -> 
         assigned the same integer value. If return_num is True, it also returns the number of labels.
 
     """
-    # Create a copy of the original mask
+    # Create a zero-initialized array for the labeled output.
+    # This ensures pixels originally 0 remain 0 in the output.
     labeled = np.zeros_like(mask, dtype=np.int32)
 
-    # Get unique non-zero values from the original mask
+    # Get unique non-zero values from the original mask.
+    # We only need to find components for the foreground pixels.
     unique_values = np.unique(mask[mask != 0])
 
-    # Label each unique value separately
-    next_label = 1
+    # Set connectivity for OpenCV (4 or 8) once before the loop.
+    cv2_connectivity = 4 if connectivity == 1 else 8
+
+    # Process each unique non-zero value separately.
+    # Components are defined as connected regions of pixels with the *same* original value.
+    next_label = 1 # Global label counter starts from 1
     for value in unique_values:
-        binary_mask = (mask == value).astype(np.uint8)
+        # Create a binary mask where pixels matching the current value are 1, others are 0.
+        current_value_mask = (mask == value)
+        binary_mask = current_value_mask.astype(np.uint8)
 
-        # Set connectivity for OpenCV (4 or 8)
-        cv2_connectivity = 4 if connectivity == 1 else 8
+        # Use OpenCV's connectedComponents on the binary mask.
+        # This finds components within the group of pixels having the 'value'.
+        num_labels_opencv, labels_opencv = cv2.connectedComponents(binary_mask, connectivity=cv2_connectivity)
 
-        # Use OpenCV's connectedComponents
-        num_labels, labels = cv2.connectedComponents(binary_mask, connectivity=cv2_connectivity)
+        # If components were found (num_labels_opencv > 1, because 0 is background),
+        # relabel them with global unique labels.
+        if num_labels_opencv > 1:
+            # Optimization: Avoid iterating through each component label from OpenCV individually.
+            # The original code used a Python loop and repeated boolean indexing
+            # (labeled[labels == i] = next_label) which can be slow.
+            # Instead, use boolean indexing and NumPy operations to relabel all components
+            # for the current value in one go.
 
-        # Assign new labels
-        for i in range(1, num_labels):
-            labeled[labels == i] = next_label
-            next_label += 1
+            # Get the OpenCV labels (1 to num_labels_opencv-1) for the pixels
+            # that belong to the current value and are part of a component.
+            # These are the pixels where current_value_mask is True.
+            # labels_opencv[current_value_mask] extracts these labels into a 1D array.
+            opencv_labels_to_map = labels_opencv[current_value_mask]
 
+            # Apply the mapping: OpenCV label k (where k is from 1 to num_labels_opencv-1)
+            # maps to global label next_label + k - 1.
+            # Assign these new global labels to the corresponding pixels in the 'labeled' output array.
+            labeled[current_value_mask] = next_label + opencv_labels_to_map - 1
+
+            # Increment the global label counter.
+            # We add the number of components found by OpenCV for this value (excluding background).
+            next_label += num_labels_opencv - 1
+
+    # The total number of labels found is the final global label counter minus 1 (since it started from 1).
+    # This matches the original code's calculation for the total number of labels.
     num_labels = next_label - 1
 
+    # Return the labeled array and optionally the total number of labels.
     return (labeled, num_labels) if return_num else labeled
 
 
