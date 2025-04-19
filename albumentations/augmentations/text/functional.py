@@ -21,6 +21,7 @@ from albucore import (
 )
 
 from albumentations.core.type_definitions import PAIR
+from PIL import Image, ImageDraw
 
 # Importing wordnet and other dependencies only for type checking
 if TYPE_CHECKING:
@@ -46,7 +47,7 @@ def delete_random_words(words: list[str], num_words: int, py_random: random.Rand
     if num_words >= len(words):
         return ""
 
-    indices_to_delete = py_random.sample(range(len(words)), num_words)
+    indices_to_delete = set(py_random.sample(range(len(words)), num_words))
     new_words = [word for idx, word in enumerate(words) if idx not in indices_to_delete]
     return " ".join(new_words)
 
@@ -70,11 +71,13 @@ def swap_random_words(words: list[str], num_words: int, py_random: random.Random
     if num_words == 0 or len(words) < PAIR:
         return " ".join(words)
 
-    words = words.copy()
-
+    words = words[:]
+    len_words = len(words)
+    
     for _ in range(num_words):
-        idx1, idx2 = py_random.sample(range(len(words)), 2)
+        idx1, idx2 = py_random.sample(range(len_words), 2)
         words[idx1], words[idx2] = words[idx2], words[idx1]
+
     return " ".join(words)
 
 
@@ -106,6 +109,7 @@ def insert_random_stopwords(
     for _ in range(num_insertions):
         idx = py_random.randint(0, len(words))
         words.insert(idx, py_random.choice(stopwords))
+
     return " ".join(words)
 
 
@@ -160,13 +164,10 @@ def draw_text_on_pil_image(pil_image: Image, metadata_list: list[dict[str, Any]]
 
 def draw_text_on_multi_channel_image(image: np.ndarray, metadata_list: list[dict[str, Any]]) -> np.ndarray:
     """Draw text on a multi-channel image with more than three channels."""
-    try:
-        from PIL import Image, ImageDraw
-    except ImportError:
-        raise ImportError("Pillow is not installed") from ImportError
-
-    channels = [Image.fromarray(image[:, :, i]) for i in range(image.shape[2])]
-    pil_images = [ImageDraw.Draw(channel) for channel in channels]
+    
+    # Step 1: Create PIL image from numpy array, keeping channels intact
+    pil_image = Image.fromarray(image)
+    draw = ImageDraw.Draw(pil_image)
 
     for metadata in metadata_list:
         bbox_coords = metadata["bbox_coords"]
@@ -174,26 +175,24 @@ def draw_text_on_multi_channel_image(image: np.ndarray, metadata_list: list[dict
         font = metadata["font"]
         font_color = metadata["font_color"]
 
-        # Handle font_color as tuple[float, ...]
         # Ensure we have enough color values for all channels
         if len(font_color) < image.shape[2]:
-            # If fewer values than channels, pad with zeros
-            font_color = tuple(list(font_color) + [0] * (image.shape[2] - len(font_color)))
+            # Pad with zeros if fewer values than channels
+            font_color += (0,) * (image.shape[2] - len(font_color))
         elif len(font_color) > image.shape[2]:
-            # If more values than channels, truncate
+            # Truncate if more values than channels
             font_color = font_color[: image.shape[2]]
 
         # Convert to integers for PIL
-        font_color = [int(c) for c in font_color]
+        font_color = tuple(int(c) for c in font_color)
 
         position = bbox_coords[:2]
 
-        # For each channel, use the corresponding color value
-        for channel_id, pil_image in enumerate(pil_images):
-            # For single-channel PIL images, color must be an integer
-            pil_image.text(position, text, font=font, fill=font_color[channel_id])
+        # Draw text with the corresponding color values for all channels at once
+        draw.text(position, text, font=font, fill=font_color)
 
-    return np.stack([np.array(channel) for channel in channels], axis=2)
+    # Step 2: Convert back the PIL image to numpy array
+    return np.array(pil_image)
 
 
 @uint8_io
