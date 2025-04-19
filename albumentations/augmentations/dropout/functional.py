@@ -583,6 +583,7 @@ def mask_dropout_keypoints(
 
     """
     # Ensure dropout_mask is 2D
+    # Preserve original mask dimension handling logic
     if dropout_mask.ndim > 2:
         if dropout_mask.shape[0] == 1:  # Shape is (1, H, W)
             dropout_mask = dropout_mask.squeeze(0)
@@ -591,23 +592,52 @@ def mask_dropout_keypoints(
         else:  # Shape is (C, H, W)
             dropout_mask = np.any(dropout_mask, axis=0)
 
-    # Get coordinates as integers
+    # Get coordinates as integers for indexing
     coords = keypoints[:, :2].astype(int)
+    x = coords[:, 0]
+    y = coords[:, 1]
 
-    # Filter out keypoints that are outside the mask dimensions
-    valid_mask = (
-        (coords[:, 0] >= 0)
-        & (coords[:, 0] < dropout_mask.shape[1])
-        & (coords[:, 1] >= 0)
-        & (coords[:, 1] < dropout_mask.shape[0])
-    )
+    # Get mask dimensions
+    mask_height, mask_width = dropout_mask.shape
 
-    # For valid keypoints, check if they fall on non-dropped pixels
-    if np.any(valid_mask):
-        valid_coords = coords[valid_mask]
-        valid_mask[valid_mask] = ~dropout_mask[valid_coords[:, 1], valid_coords[:, 0]]
+    # Create a boolean mask indicating which keypoints to keep.
+    # A keypoint is kept if:
+    # 1. It's within the bounds of the dropout_mask.
+    # 2. The corresponding pixel in the dropout_mask is False (not dropped).
 
-    return keypoints[valid_mask]
+    # Step 1: Check bounds
+    # Create a mask for points within the dropout_mask dimensions
+    within_bounds = (x >= 0) & (x < mask_width) & (y >= 0) & (y < mask_height)
+
+    # Initialize the final keep mask. Points outside bounds start as False.
+    # Points within bounds will be set based on the dropout_mask value.
+    keep_mask = np.zeros(len(keypoints), dtype=bool)
+
+    # Step 2: For points within bounds, check the dropout_mask value
+    # Get the coordinates for points that are within bounds using the boolean mask
+    valid_y = y[within_bounds]
+    valid_x = x[within_bounds]
+
+    # If there are any points within bounds, perform the mask lookup
+    # This avoids indexing the dropout_mask with empty arrays if no points are within bounds
+    if len(valid_y) > 0:
+        # Look up mask values for these valid coordinates
+        # `~dropout_mask` is True for points NOT dropped
+        should_keep_based_on_mask = ~dropout_mask[valid_y, valid_x]
+
+        # Update the `keep_mask`: set the entries corresponding to the
+        # original points that were `within_bounds` based on the mask lookup result.
+        # `keep_mask[within_bounds]` selects the positions in `keep_mask` that correspond
+        # to the points that were within the mask bounds.
+        # `should_keep_based_on_mask` provides the boolean values (True if not dropped, False if dropped)
+        # for those selected positions.
+        keep_mask[within_bounds] = should_keep_based_on_mask
+
+    # The `keep_mask` now correctly represents points within bounds AND not dropped.
+    # Points originally outside bounds were never set to True and remain False.
+
+    # Return keypoints filtered by the final mask
+    return keypoints[keep_mask]
 
 
 def label(mask: np.ndarray, return_num: bool = False, connectivity: int = 2) -> np.ndarray | tuple[np.ndarray, int]:
