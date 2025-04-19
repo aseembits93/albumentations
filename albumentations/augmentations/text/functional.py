@@ -46,7 +46,7 @@ def delete_random_words(words: list[str], num_words: int, py_random: random.Rand
     if num_words >= len(words):
         return ""
 
-    indices_to_delete = py_random.sample(range(len(words)), num_words)
+    indices_to_delete = set(py_random.sample(range(len(words)), num_words))
     new_words = [word for idx, word in enumerate(words) if idx not in indices_to_delete]
     return " ".join(new_words)
 
@@ -70,11 +70,14 @@ def swap_random_words(words: list[str], num_words: int, py_random: random.Random
     if num_words == 0 or len(words) < PAIR:
         return " ".join(words)
 
-    words = words.copy()
+    words = words[:]
+    len_words = len(words)
+    indices_range = list(range(len_words))  # Precomputing the range
 
     for _ in range(num_words):
-        idx1, idx2 = py_random.sample(range(len(words)), 2)
+        idx1, idx2 = py_random.sample(indices_range, 2)
         words[idx1], words[idx2] = words[idx2], words[idx1]
+
     return " ".join(words)
 
 
@@ -106,6 +109,7 @@ def insert_random_stopwords(
     for _ in range(num_insertions):
         idx = py_random.randint(0, len(words))
         words.insert(idx, py_random.choice(stopwords))
+
     return " ".join(words)
 
 
