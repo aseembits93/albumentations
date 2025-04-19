@@ -48,22 +48,33 @@ def get_crop_coords(
         tuple[int, int, int, int]: Crop coordinates.
 
     """
-    # h_start is [0, 1) and should map to [0, (height - crop_height)]  (note inclusive)
-    # This is conceptually equivalent to mapping onto `range(0, (height - crop_height + 1))`
-    # See: https://github.com/albumentations-team/albumentations/pull/1080
-    # We want range for coordinated to be [0, image_size], right side is included
+    # Split out dimensions once
+    height, width = image_shape
+    crop_h0, crop_w0 = crop_shape
 
-    height, width = image_shape[:2]
+    # Compute vertical
+    dh = height - crop_h0
+    if dh >= 0:
+        # Normal case: smaller crop
+        # map h_start∈[0,1) → [0, dh+1)
+        y_min = int((dh + 1) * h_start)
+        crop_h = crop_h0
+    else:
+        # Oversized crop: clamp to image, float mult is always <1 → int(1*h_start)==0
+        y_min = 0
+        crop_h = height
 
-    # Clip crop dimensions to image dimensions
-    crop_height = min(crop_shape[0], height)
-    crop_width = min(crop_shape[1], width)
+    # Compute horizontal
+    dw = width - crop_w0
+    if dw >= 0:
+        x_min = int((dw + 1) * w_start)
+        crop_w = crop_w0
+    else:
+        x_min = 0
+        crop_w = width
 
-    y_min = int((height - crop_height + 1) * h_start)
-    y_max = y_min + crop_height
-    x_min = int((width - crop_width + 1) * w_start)
-    x_max = x_min + crop_width
-    return x_min, y_min, x_max, y_max
+    # Build output
+    return x_min, y_min, x_min + crop_w, y_min + crop_h
 
 
 def crop_bboxes_by_coords(
