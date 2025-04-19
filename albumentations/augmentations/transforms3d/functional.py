@@ -293,31 +293,41 @@ def keypoints_rot90(
         np.ndarray: Rotated keypoints with same shape as input.
 
     """
-    if k == 0 or len(keypoints) == 0:
+    # Early exit if no rotation or no keypoints
+    n = len(keypoints)
+    if k == 0 or n == 0:
         return keypoints
 
-    # Normalize factor to range [0, 3]
-    k = ((k % 4) + 4) % 4
+    # Python's % already yields 0..3 for negative k as well
+    k = k % 4
+    if k == 0:
+        return keypoints
 
+    # Unpack for speed
+    a0, a1 = axes
+    d0 = volume_shape[a0]
+    d1 = volume_shape[a1]
+
+    # Copy only once for the result
     result = keypoints.copy()
 
-    # Get dimensions for the rotation axes
-    dims = [volume_shape[ax] for ax in axes]
+    # Grab original coords from the input (no extra copy)
+    c0 = keypoints[:, a0]
+    c1 = keypoints[:, a1]
 
-    # Get coordinates to rotate
-    coords1 = result[:, axes[0]].copy()
-    coords2 = result[:, axes[1]].copy()
-
-    # Apply rotation based on factor (counterclockwise)
-    if k == 1:  # 90 degrees CCW
-        result[:, axes[0]] = (dims[1] - 1) - coords2
-        result[:, axes[1]] = coords1
-    elif k == 2:  # 180 degrees
-        result[:, axes[0]] = (dims[0] - 1) - coords1
-        result[:, axes[1]] = (dims[1] - 1) - coords2
-    elif k == 3:  # 270 degrees CCW
-        result[:, axes[0]] = coords2
-        result[:, axes[1]] = (dims[0] - 1) - coords1
+    # Apply the 90°-multiples
+    if k == 1:
+        # 90 degrees CCW
+        result[:, a0] = (d1 - 1) - c1
+        result[:, a1] = c0
+    elif k == 2:
+        # 180 degrees
+        result[:, a0] = (d0 - 1) - c0
+        result[:, a1] = (d1 - 1) - c1
+    else:  # k == 3
+        # 270 degrees CCW
+        result[:, a0] = c1
+        result[:, a1] = (d0 - 1) - c0
 
     return result
 
