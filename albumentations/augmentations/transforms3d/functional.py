@@ -293,31 +293,31 @@ def keypoints_rot90(
         np.ndarray: Rotated keypoints with same shape as input.
 
     """
-    if k == 0 or len(keypoints) == 0:
+    if k == 0 or keypoints.size == 0:
         return keypoints
 
     # Normalize factor to range [0, 3]
-    k = ((k % 4) + 4) % 4
-
-    result = keypoints.copy()
+    k = k % 4
+    if k == 0:
+        return keypoints
 
     # Get dimensions for the rotation axes
-    dims = [volume_shape[ax] for ax in axes]
+    dim1, dim2 = volume_shape[axes[0]], volume_shape[axes[1]]
 
     # Get coordinates to rotate
-    coords1 = result[:, axes[0]].copy()
-    coords2 = result[:, axes[1]].copy()
+    coords1, coords2 = keypoints[:, axes[0]], keypoints[:, axes[1]]
+    result = keypoints.copy()
 
     # Apply rotation based on factor (counterclockwise)
     if k == 1:  # 90 degrees CCW
-        result[:, axes[0]] = (dims[1] - 1) - coords2
+        result[:, axes[0]] = dim2 - 1 - coords2
         result[:, axes[1]] = coords1
     elif k == 2:  # 180 degrees
-        result[:, axes[0]] = (dims[0] - 1) - coords1
-        result[:, axes[1]] = (dims[1] - 1) - coords2
+        result[:, axes[0]] = dim1 - 1 - coords1
+        result[:, axes[1]] = dim2 - 1 - coords2
     elif k == 3:  # 270 degrees CCW
         result[:, axes[0]] = coords2
-        result[:, axes[1]] = (dims[0] - 1) - coords1
+        result[:, axes[1]] = dim1 - 1 - coords1
 
     return result
 
