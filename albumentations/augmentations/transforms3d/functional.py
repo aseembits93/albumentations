@@ -163,63 +163,104 @@ def transform_cube(cube: np.ndarray, index: int) -> np.ndarray:
     if not (0 <= index < 48):
         raise ValueError("Index must be between 0 and 47")
 
-    transformations = {
-        # First 4: rotate around axis 0 (indices 0-3)
-        0: lambda x: x,
-        1: lambda x: np.rot90(x, k=1, axes=(1, 2)),
-        2: lambda x: np.rot90(x, k=2, axes=(1, 2)),
-        3: lambda x: np.rot90(x, k=3, axes=(1, 2)),
-        # Next 4: flip 180° about axis 1, then rotate around axis 0 (indices 4-7)
-        4: lambda x: x[::-1, :, ::-1],  # was: np.flip(x, axis=(0, 2))
-        5: lambda x: np.rot90(np.rot90(x, k=2, axes=(0, 2)), k=1, axes=(1, 2)),
-        6: lambda x: x[::-1, ::-1, :],  # was: np.flip(x, axis=(0, 1))
-        7: lambda x: np.rot90(np.rot90(x, k=2, axes=(0, 2)), k=3, axes=(1, 2)),
-        # Next 8: split between 90° and 270° about axis 1, then rotate around axis 2 (indices 8-15)
-        8: lambda x: np.rot90(x, k=1, axes=(0, 2)),
-        9: lambda x: np.rot90(np.rot90(x, k=1, axes=(0, 2)), k=1, axes=(0, 1)),
-        10: lambda x: np.rot90(np.rot90(x, k=1, axes=(0, 2)), k=2, axes=(0, 1)),
-        11: lambda x: x.transpose(1, 2, 0, *range(3, x.ndim)),
-        12: lambda x: np.rot90(x, k=-1, axes=(0, 2)),
-        13: lambda x: np.rot90(np.rot90(x, k=-1, axes=(0, 2)), k=1, axes=(0, 1)),
-        14: lambda x: np.rot90(np.rot90(x, k=-1, axes=(0, 2)), k=2, axes=(0, 1)),
-        15: lambda x: np.rot90(np.rot90(x, k=-1, axes=(0, 2)), k=3, axes=(0, 1)),
-        # Final 8: split between rotations about axis 2, then rotate around axis 1 (indices 16-23)
-        16: lambda x: np.rot90(x, k=1, axes=(0, 1)),
-        17: lambda x: np.rot90(np.rot90(x, k=1, axes=(0, 1)), k=1, axes=(0, 2)),
-        18: lambda x: np.rot90(np.rot90(x, k=1, axes=(0, 1)), k=2, axes=(0, 2)),
-        19: lambda x: x.transpose(2, 0, 1, *range(3, x.ndim)),
-        20: lambda x: np.rot90(x, k=-1, axes=(0, 1)),
-        21: lambda x: np.rot90(np.rot90(x, k=-1, axes=(0, 1)), k=1, axes=(0, 2)),
-        22: lambda x: np.rot90(np.rot90(x, k=-1, axes=(0, 1)), k=2, axes=(0, 2)),
-        23: lambda x: np.rot90(np.rot90(x, k=-1, axes=(0, 1)), k=3, axes=(0, 2)),
-        # Reflected versions (24-47) - same as above but with initial reflection
-        24: lambda x: x[:, :, ::-1],  # was: np.flip(x, axis=2)
-        25: lambda x: x.transpose(0, 2, 1, *range(3, x.ndim)),
-        26: lambda x: x[:, ::-1, :],  # was: np.flip(x, axis=1)
-        27: lambda x: np.rot90(x[:, :, ::-1], k=3, axes=(1, 2)),
-        28: lambda x: x[::-1, :, :],  # was: np.flip(x, axis=0)
-        29: lambda x: np.rot90(x[::-1, :, :], k=1, axes=(1, 2)),
-        30: lambda x: x[::-1, ::-1, ::-1],  # was: np.flip(x, axis=(0, 1, 2))
-        31: lambda x: np.rot90(x[::-1, :, :], k=-1, axes=(1, 2)),
-        32: lambda x: x.transpose(2, 1, 0, *range(3, x.ndim)),
-        33: lambda x: x.transpose(1, 2, 0, *range(3, x.ndim))[::-1, :, :],
-        34: lambda x: x.transpose(2, 1, 0, *range(3, x.ndim))[::-1, ::-1, :],
-        35: lambda x: x.transpose(1, 2, 0, *range(3, x.ndim))[:, ::-1, :],
-        36: lambda x: np.rot90(x[:, :, ::-1], k=-1, axes=(0, 2)),
-        37: lambda x: x.transpose(1, 2, 0, *range(3, x.ndim))[::-1, ::-1, ::-1],
-        38: lambda x: x.transpose(2, 1, 0, *range(3, x.ndim))[:, ::-1, ::-1],
-        39: lambda x: x.transpose(1, 2, 0, *range(3, x.ndim))[:, :, ::-1],
-        40: lambda x: np.rot90(x[:, :, ::-1], k=1, axes=(0, 1)),
-        41: lambda x: x.transpose(2, 0, 1, *range(3, x.ndim))[:, :, ::-1],
-        42: lambda x: x.transpose(1, 0, 2, *range(3, x.ndim)),
-        43: lambda x: x.transpose(2, 0, 1, *range(3, x.ndim))[::-1, :, :],
-        44: lambda x: np.rot90(x[:, :, ::-1], k=-1, axes=(0, 1)),
-        45: lambda x: x.transpose(2, 0, 1, *range(3, x.ndim))[:, ::-1, :],
-        46: lambda x: x.transpose(1, 0, 2, *range(3, x.ndim))[::-1, ::-1, :],
-        47: lambda x: x.transpose(2, 0, 1, *range(3, x.ndim))[::-1, ::-1, ::-1],
-    }
-
-    return transformations[index](cube.copy())
+    if index == 0:
+        return cube.copy()
+    elif index == 1:
+        return np.rot90(cube, k=1, axes=(1, 2))
+    elif index == 2:
+        return np.rot90(cube, k=2, axes=(1, 2))
+    elif index == 3:
+        return np.rot90(cube, k=3, axes=(1, 2))
+    elif index == 4:
+        return cube[::-1, :, ::-1]
+    elif index == 5:
+        return np.rot90(np.rot90(cube, k=2, axes=(0, 2)), k=1, axes=(1, 2))
+    elif index == 6:
+        return cube[::-1, ::-1, :]
+    elif index == 7:
+        return np.rot90(np.rot90(cube, k=2, axes=(0, 2)), k=3, axes=(1, 2))
+    elif index == 8:
+        return np.rot90(cube, k=1, axes=(0, 2))
+    elif index == 9:
+        return np.rot90(np.rot90(cube, k=1, axes=(0, 2)), k=1, axes=(0, 1))
+    elif index == 10:
+        return np.rot90(np.rot90(cube, k=1, axes=(0, 2)), k=2, axes=(0, 1))
+    elif index == 11:
+        return cube.transpose(1, 2, 0, *range(3, cube.ndim))
+    elif index == 12:
+        return np.rot90(cube, k=-1, axes=(0, 2))
+    elif index == 13:
+        return np.rot90(np.rot90(cube, k=-1, axes=(0, 2)), k=1, axes=(0, 1))
+    elif index == 14:
+        return np.rot90(np.rot90(cube, k=-1, axes=(0, 2)), k=2, axes=(0, 1))
+    elif index == 15:
+        return np.rot90(np.rot90(cube, k=-1, axes=(0, 2)), k=3, axes=(0, 1))
+    elif index == 16:
+        return np.rot90(cube, k=1, axes=(0, 1))
+    elif index == 17:
+        return np.rot90(np.rot90(cube, k=1, axes=(0, 1)), k=1, axes=(0, 2))
+    elif index == 18:
+        return np.rot90(np.rot90(cube, k=1, axes=(0, 1)), k=2, axes=(0, 2))
+    elif index == 19:
+        return cube.transpose(2, 0, 1, *range(3, cube.ndim))
+    elif index == 20:
+        return np.rot90(cube, k=-1, axes=(0, 1))
+    elif index == 21:
+        return np.rot90(np.rot90(cube, k=-1, axes=(0, 1)), k=1, axes=(0, 2))
+    elif index == 22:
+        return np.rot90(np.rot90(cube, k=-1, axes=(0, 1)), k=2, axes=(0, 2))
+    elif index == 23:
+        return np.rot90(np.rot90(cube, k=-1, axes=(0, 1)), k=3, axes=(0, 2))
+    elif index == 24:
+        return cube[:, :, ::-1]
+    elif index == 25:
+        return cube.transpose(0, 2, 1, *range(3, cube.ndim))
+    elif index == 26:
+        return cube[:, ::-1, :]
+    elif index == 27:
+        return np.rot90(cube[:, :, ::-1], k=3, axes=(1, 2))
+    elif index == 28:
+        return cube[::-1, :, :]
+    elif index == 29:
+        return np.rot90(cube[::-1, :, :], k=1, axes=(1, 2))
+    elif index == 30:
+        return cube[::-1, ::-1, ::-1]
+    elif index == 31:
+        return np.rot90(cube[::-1, :, :], k=-1, axes=(1, 2))
+    elif index == 32:
+        return cube.transpose(2, 1, 0, *range(3, cube.ndim))
+    elif index == 33:
+        return cube.transpose(1, 2, 0, *range(3, cube.ndim))[::-1, :, :]
+    elif index == 34:
+        return cube.transpose(2, 1, 0, *range(3, cube.ndim))[::-1, ::-1, :]
+    elif index == 35:
+        return cube.transpose(1, 2, 0, *range(3, cube.ndim))[:, ::-1, :]
+    elif index == 36:
+        return np.rot90(cube[:, :, ::-1], k=-1, axes=(0, 2))
+    elif index == 37:
+        return cube.transpose(1, 2, 0, *range(3, cube.ndim))[::-1, ::-1, ::-1]
+    elif index == 38:
+        return cube.transpose(2, 1, 0, *range(3, cube.ndim))[:, ::-1, ::-1]
+    elif index == 39:
+        return cube.transpose(1, 2, 0, *range(3, cube.ndim))[:, :, ::-1]
+    elif index == 40:
+        return np.rot90(cube[:, :, ::-1], k=1, axes=(0, 1))
+    elif index == 41:
+        return cube.transpose(2, 0, 1, *range(3, cube.ndim))[:, :, ::-1]
+    elif index == 42:
+        return cube.transpose(1, 0, 2, *range(3, cube.ndim))
+    elif index == 43:
+        return cube.transpose(2, 0, 1, *range(3, cube.ndim))[::-1, :, :]
+    elif index == 44:
+        return np.rot90(cube[:, :, ::-1], k=-1, axes=(0, 1))
+    elif index == 45:
+        return cube.transpose(2, 0, 1, *range(3, cube.ndim))[:, ::-1, :]
+    elif index == 46:
+        return cube.transpose(1, 0, 2, *range(3, cube.ndim))[::-1, ::-1, :]
+    elif index == 47:
+        return cube.transpose(2, 0, 1, *range(3, cube.ndim))[::-1, ::-1, ::-1]
+    
+    return cube.copy()
 
 
 @handle_empty_array("keypoints")
