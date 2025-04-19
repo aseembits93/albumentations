@@ -229,23 +229,44 @@ def keypoints_d4(
 
     """
     rows, cols = image_shape[:2]
-    transformations = {
-        "e": lambda x: x,  # Identity transformation
-        "r90": lambda x: keypoints_rot90(x, 1, image_shape),  # Rotate 90 degrees
-        "r180": lambda x: keypoints_rot90(x, 2, image_shape),  # Rotate 180 degrees
-        "r270": lambda x: keypoints_rot90(x, 3, image_shape),  # Rotate 270 degrees
-        "v": lambda x: keypoints_vflip(x, rows),  # Vertical flip
-        "hvt": lambda x: keypoints_transpose(
-            keypoints_rot90(x, 2, image_shape),
-        ),  # Reflect over anti diagonal
-        "h": lambda x: keypoints_hflip(x, cols),  # Horizontal flip
-        "t": lambda x: keypoints_transpose(x),  # Transpose (reflect over main diagonal)
-    }
-    # Execute the appropriate transformation
-    if group_member in transformations:
-        return transformations[group_member](keypoints)
 
-    raise ValueError(f"Invalid group member: {group_member}")
+    # Use if/elif/else instead of a dictionary lookup for potentially faster execution
+    # by avoiding dictionary creation and lambda function call overhead.
+    if group_member == "e":
+        # Identity transformation
+        return keypoints
+    elif group_member == "r90":
+        # Rotate 90 degrees
+        # Assuming keypoints_rot90 exists and handles factor=1 correctly
+        return keypoints_rot90(keypoints, 1, image_shape)
+    elif group_member == "r180":
+        # Rotate 180 degrees
+        # Assuming keypoints_rot90 exists and handles factor=2 correctly
+        return keypoints_rot90(keypoints, 2, image_shape)
+    elif group_member == "r270":
+        # Rotate 270 degrees
+        # Assuming keypoints_rot90 exists and handles factor=3 correctly
+        return keypoints_rot90(keypoints, 3, image_shape)
+    elif group_member == "v":
+        # Vertical flip
+        # Assuming keypoints_vflip exists
+        return keypoints_vflip(keypoints, rows)
+    elif group_member == "hvt":
+        # Reflect over anti diagonal (Rotate 180 degrees then transpose)
+        # Assuming keypoints_rot90 and keypoints_transpose exist
+        rotated_keypoints = keypoints_rot90(keypoints, 2, image_shape)
+        return keypoints_transpose(rotated_keypoints)
+    elif group_member == "h":
+        # Horizontal flip
+        # Assuming keypoints_hflip exists
+        return keypoints_hflip(keypoints, cols)
+    elif group_member == "t":
+        # Transpose (reflect over main diagonal)
+        # Assuming keypoints_transpose exists
+        return keypoints_transpose(keypoints)
+    else:
+        # Invalid group member specified
+        raise ValueError(f"Invalid group member: {group_member}")
 
 
 @preserve_channel_dim
