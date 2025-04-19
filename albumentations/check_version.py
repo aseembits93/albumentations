@@ -11,7 +11,8 @@ from __future__ import annotations
 import json
 import re
 import urllib.request
-from urllib.request import OpenerDirector
+from urllib.request import (HTTPError, HTTPHandler, HTTPSHandler,
+                            OpenerDirector, URLError, build_opener)
 from warnings import warn
 
 from albumentations import __version__ as current_version
@@ -36,7 +37,10 @@ def get_opener() -> OpenerDirector:
     """
     global opener  # noqa: PLW0603
     if opener is None:
-        opener = urllib.request.build_opener(urllib.request.HTTPHandler(), urllib.request.HTTPSHandler())
+        # Use directly imported names for build_opener, HTTPHandler, HTTPSHandler
+        # to potentially speed up the initial creation slightly by avoiding
+        # repeated attribute lookups on the urllib.request module object.
+        opener = build_opener(HTTPHandler(), HTTPSHandler())
     return opener
 
 
@@ -55,13 +59,28 @@ def fetch_version_info() -> str:
     opener = get_opener()
     url = "https://pypi.org/pypi/albumentations/json"
     try:
+        # The network request is the primary performance bottleneck here.
+        # The timeout limits the maximum waiting time.
         with opener.open(url, timeout=2) as response:
+            # Checking status and processing response data are standard and efficient steps.
             if response.status == SUCCESS_HTML_CODE:
+                # Reading the whole response at once is efficient for expected small size JSON.
                 data = response.read()
+                # Getting encoding and decoding are fast CPU operations for small data.
                 encoding = response.info().get_content_charset("utf-8")
                 return data.decode(encoding)
-    except Exception as e:  # noqa: BLE001
-        warn(f"Error fetching version info {e}", stacklevel=2)
+
+        # If status is not SUCCESS_HTML_CODE, the function falls through to return ""
+        # as per the original logic. The 'with' statement ensures the response is closed.
+
+    # Catch specific network and HTTP errors for slightly better error handling clarity.
+    # This has negligible impact on performance on the success path.
+    except (URLError, HTTPError) as e:
+        warn(f"Network or HTTP error fetching version info from {url}: {e}", stacklevel=2)
+    # Catch any other unexpected exceptions (e.g., during read or decode)
+    except Exception as e:
+        warn(f"Unexpected error fetching version info from {url}: {e}", stacklevel=2)
+
     return ""
 
 
