@@ -283,24 +283,21 @@ def resize_boxes_to_visible_area(
     y2 = boxes[:, 3].astype(int)
 
     # Process each box individually to avoid array shape issues
-    new_boxes: list[np.ndarray] = []
+    new_boxes = []
 
-    regions = [hole_mask[y1[i] : y2[i], x1[i] : x2[i]] for i in range(len(boxes))]
-    visible_areas = [1 - region for region in regions]
+    for i in range(len(boxes)):
+        region = hole_mask[y1[i] : y2[i], x1[i] : x2[i]]
+        visible = 1 - region
 
-    for i, (visible, box) in enumerate(zip(visible_areas, boxes)):
         if not visible.any():
             continue
 
         # Find visible coordinates
-        y_visible = visible.any(axis=1)
-        x_visible = visible.any(axis=0)
-
-        y_coords = np.nonzero(y_visible)[0]
-        x_coords = np.nonzero(x_visible)[0]
+        y_coords = np.nonzero(visible.any(axis=1))[0]
+        x_coords = np.nonzero(visible.any(axis=0))[0]
 
         # Update only the coordinate part of the box
-        new_box = box.copy()
+        new_box = boxes[i].copy()
         new_box[0] = x1[i] + x_coords[0]  # x_min
         new_box[1] = y1[i] + y_coords[0]  # y_min
         new_box[2] = x1[i] + x_coords[-1] + 1  # x_max
@@ -308,8 +305,7 @@ def resize_boxes_to_visible_area(
 
         new_boxes.append(new_box)
 
-        # Return empty array with correct shape if all boxes were removed
-
+    # Return empty array with correct shape if all boxes were removed
     return np.array(new_boxes) if new_boxes else np.zeros((0, boxes.shape[1]), dtype=boxes.dtype)
 
 
@@ -344,10 +340,25 @@ def filter_bboxes_by_holes(
         x_min, y_min, x_max, y_max = hole.astype(int)
         hole_mask[y_min:y_max, x_min:x_max] = 1
 
-    # Filter boxes by area and visibility
+    # Convert bounding boxes to integer coordinates
     bboxes_int = bboxes.astype(int)
+
+    # Precompute box areas
     box_areas = (bboxes_int[:, 2] - bboxes_int[:, 0]) * (bboxes_int[:, 3] - bboxes_int[:, 1])
-    intersection_areas = np.array([np.sum(hole_mask[y:y2, x:x2]) for x, y, x2, y2 in bboxes_int[:, :4]])
+
+    # Compute the intersection areas using vectorized operations
+    x1_inter = np.maximum(bboxes_int[:, 0][:, np.newaxis], holes[:, 0])
+    y1_inter = np.maximum(bboxes_int[:, 1][:, np.newaxis], holes[:, 1])
+    x2_inter = np.minimum(bboxes_int[:, 2][:, np.newaxis], holes[:, 2])
+    y2_inter = np.minimum(bboxes_int[:, 3][:, np.newaxis], holes[:, 3])
+
+    inter_widths = np.maximum(0, x2_inter - x1_inter)
+    inter_heights = np.maximum(0, y2_inter - y1_inter)
+    intersections = inter_widths * inter_heights
+
+    # Sum intersections along holes axis
+    intersection_areas = intersections.sum(axis=1)
+
     remaining_areas = box_areas - intersection_areas
     visibility_ratios = remaining_areas / box_areas
     mask = (remaining_areas >= min_area) & (visibility_ratios >= min_visibility) & (remaining_areas > 0)
@@ -356,7 +367,7 @@ def filter_bboxes_by_holes(
     if len(valid_boxes) == 0:
         return np.empty((0, bboxes.shape[1]))
 
-    # Try to resize valid boxes
+    # Resize valid boxes
     return resize_boxes_to_visible_area(valid_boxes, hole_mask)
 
 
