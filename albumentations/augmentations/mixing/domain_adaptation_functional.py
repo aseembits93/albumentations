@@ -107,12 +107,18 @@ class StandardScaler(BaseScaler):
         return (x - self.mean) / self.scale
 
     def inverse_transform(self, x: np.ndarray) -> np.ndarray:
+        # same validity check as before
         if self.mean is None or self.scale is None:
             raise ValueError(
                 "This StandardScaler instance is not fitted yet. "
                 "Call 'fit' with appropriate arguments before using this estimator.",
             )
-        return (x * self.scale) + self.mean
+
+        # 1) do the elementwise multiply => allocates one array “res”
+        # 2) do the elementwise add in-place on that same array
+        res = x * self.scale
+        res += self.mean
+        return res
 
 
 class TransformerInterface(Protocol):
