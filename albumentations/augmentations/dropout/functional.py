@@ -252,21 +252,23 @@ def filter_keypoints_in_holes(keypoints: np.ndarray, holes: np.ndarray) -> np.nd
         np.ndarray: Array of keypoints that are not inside any hole.
 
     """
-    # Broadcast keypoints and holes for vectorized comparison
-    kp_x = keypoints[:, 0][:, np.newaxis]  # Shape: (num_keypoints, 1)
-    kp_y = keypoints[:, 1][:, np.newaxis]  # Shape: (num_keypoints, 1)
+    # Get x, y coordinates of keypoints
+    kp_x = keypoints[:, 0]
+    kp_y = keypoints[:, 1]
 
-    hole_x1 = holes[:, 0]  # Shape: (num_holes,)
-    hole_y1 = holes[:, 1]  # Shape: (num_holes,)
-    hole_x2 = holes[:, 2]  # Shape: (num_holes,)
-    hole_y2 = holes[:, 3]  # Shape: (num_holes,)
+    # Get coordinates of holes
+    hole_x1 = holes[:, 0]
+    hole_y1 = holes[:, 1]
+    hole_x2 = holes[:, 2]
+    hole_y2 = holes[:, 3]
 
-    # Check if each keypoint is inside each hole
-    inside_hole = (kp_x >= hole_x1) & (kp_x < hole_x2) & (kp_y >= hole_y1) & (kp_y < hole_y2)
+    # Initialize an array to flag keypoints validity
+    valid_keypoints = np.ones(keypoints.shape[0], dtype=bool)  # Assume all keypoints are valid initially
 
-    # A keypoint is valid if it's not inside any hole
-    valid_keypoints = ~np.any(inside_hole, axis=1)
-
+    # Iterate over each hole and check which keypoints fall into the hole
+    for x1, y1, x2, y2 in zip(hole_x1, hole_y1, hole_x2, hole_y2):
+        valid_keypoints &= ~((kp_x >= x1) & (kp_x < x2) & (kp_y >= y1) & (kp_y < y2))
+        
     return keypoints[valid_keypoints]
 
 
