@@ -748,15 +748,13 @@ def add_rain(
 ) -> np.ndarray:
     """Optimized version using OpenCV line drawing."""
     if not rain_drops.size:
-        return img.copy()
-
-    img = img.copy()
+        return img
 
     # Pre-allocate rain layer
     rain_layer = np.zeros_like(img, dtype=np.uint8)
 
     # Calculate end points correctly
-    end_points = rain_drops + np.array([[slant, drop_length]])  # This creates correct shape
+    end_points = rain_drops + [slant, drop_length]
 
     # Stack arrays properly - both must be same shape arrays
     lines = np.stack((rain_drops, end_points), axis=1)  # Use tuple and proper axis
@@ -764,21 +762,21 @@ def add_rain(
     cv2.polylines(
         rain_layer,
         lines.astype(np.int32),
-        False,
-        drop_color,
-        drop_width,
+        isClosed=False,
+        color=drop_color,
+        thickness=drop_width,
         lineType=cv2.LINE_4,
     )
 
     if blur_value > 1:
         cv2.blur(rain_layer, (blur_value, blur_value), dst=rain_layer)
 
-    cv2.add(img, rain_layer, dst=img)
+    result_img = cv2.add(img, rain_layer)
 
     if brightness_coefficient != 1.0:
-        cv2.multiply(img, brightness_coefficient, dst=img, dtype=cv2.CV_8U)
+        cv2.convertScaleAbs(result_img, result_img, alpha=brightness_coefficient)
 
-    return img
+    return result_img
 
 
 def get_fog_particle_radiuses(
