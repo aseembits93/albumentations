@@ -410,11 +410,7 @@ def normalize_bboxes(bboxes: np.ndarray, shape: ShapeType | tuple[int, int]) -> 
         np.ndarray: Normalized bounding boxes `[(x_min, y_min, x_max, y_max, ...)]`.
 
     """
-    if isinstance(shape, tuple):
-        rows, cols = shape[:2]
-    else:
-        rows, cols = shape["height"], shape["width"]
-
+    rows, cols = shape[:2] if isinstance(shape, tuple) else (shape["height"], shape["width"])
     normalized = bboxes.copy().astype(float)
     normalized[:, [0, 2]] /= cols
     normalized[:, [1, 3]] /= rows
@@ -437,8 +433,6 @@ def denormalize_bboxes(
 
     """
     scale_factors = (shape[1], shape[0]) if isinstance(shape, tuple) else (shape["width"], shape["height"])
-
-    # Vectorized scaling of bbox coordinates
     return bboxes * np.array([*scale_factors, *scale_factors, *[1] * (bboxes.shape[1] - 4)], dtype=float)
 
 

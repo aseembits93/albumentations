@@ -451,20 +451,17 @@ def perspective_bboxes(
     denormalized_coords = denormalize_bboxes(bboxes[:, :4], image_shape)
 
     x_min, y_min, x_max, y_max = denormalized_coords.T
-    points = np.array(
-        [[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]],
-    ).transpose(2, 0, 1)
-    points_reshaped = points.reshape(-1, 1, 2)
+    points = np.c_[x_min, y_min, x_max, y_min, x_max, y_max, x_min, y_max].reshape(-1, 4, 2)
+    points_reshaped = points.reshape(-1, 1, 2).astype(np.float32)
 
-    transformed_points = cv2.perspectiveTransform(
-        points_reshaped.astype(np.float32),
-        matrix,
-    )
-    transformed_points = transformed_points.reshape(-1, 4, 2)
+    transformed_points = cv2.perspectiveTransform(points_reshaped, matrix).reshape(-1, 4, 2)
 
-    new_coords = np.array(
-        [[np.min(box[:, 0]), np.min(box[:, 1]), np.max(box[:, 0]), np.max(box[:, 1])] for box in transformed_points],
-    )
+    new_coords = np.c_[
+        transformed_points[:, :, 0].min(axis=1),
+        transformed_points[:, :, 1].min(axis=1),
+        transformed_points[:, :, 0].max(axis=1),
+        transformed_points[:, :, 1].max(axis=1),
+    ]
 
     if keep_size:
         scale_x, scale_y = width / max_width, height / max_height
@@ -474,9 +471,7 @@ def perspective_bboxes(
     else:
         output_shape = (max_height, max_width)
 
-    normalized_coords = normalize_bboxes(new_coords, output_shape)
-    transformed_bboxes[:, :4] = normalized_coords
-
+    transformed_bboxes[:, :4] = normalize_bboxes(new_coords, output_shape)
     return transformed_bboxes
 
 
