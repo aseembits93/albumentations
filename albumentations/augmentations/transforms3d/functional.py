@@ -239,38 +239,31 @@ def filter_keypoints_in_holes3d(keypoints: np.ndarray, holes: np.ndarray) -> np.
     if holes.size == 0:
         return keypoints
 
-    # Broadcast keypoints and holes for vectorized comparison
-    # Convert keypoints from XYZ to ZYX for comparison with holes
-    kp_z = keypoints[:, 2][:, np.newaxis]  # Shape: (num_keypoints, 1)
-    kp_y = keypoints[:, 1][:, np.newaxis]  # Shape: (num_keypoints, 1)
-    kp_x = keypoints[:, 0][:, np.newaxis]  # Shape: (num_keypoints, 1)
+    # Transpose and reshape keypoints for vectorized comparison
+    kp_z = keypoints[:, 2]
+    kp_y = keypoints[:, 1]
+    kp_x = keypoints[:, 0]
 
-    # Extract hole coordinates (in ZYX order)
-    hole_z1 = holes[:, 0]  # Shape: (num_holes,)
-    hole_y1 = holes[:, 1]
-    hole_x1 = holes[:, 2]
-    hole_z2 = holes[:, 3]
-    hole_y2 = holes[:, 4]
-    hole_x2 = holes[:, 5]
+    # Extract hole coordinates (in ZYX order) and reshape for broadcasting
+    hole_z1 = holes[:, 0][:, np.newaxis]
+    hole_y1 = holes[:, 1][:, np.newaxis]
+    hole_x1 = holes[:, 2][:, np.newaxis]
+    hole_z2 = holes[:, 3][:, np.newaxis]
+    hole_y2 = holes[:, 4][:, np.newaxis]
+    hole_x2 = holes[:, 5][:, np.newaxis]
 
-    # Check if each keypoint is inside each hole
+    # Check if each keypoint is inside any hole using broadcasting
     inside_hole = (
-        (kp_z >= hole_z1)
-        & (kp_z < hole_z2)
-        & (kp_y >= hole_y1)
-        & (kp_y < hole_y2)
-        & (kp_x >= hole_x1)
-        & (kp_x < hole_x2)
-    )
+        (kp_z >= hole_z1) & (kp_z < hole_z2) &
+        (kp_y >= hole_y1) & (kp_y < hole_y2) &
+        (kp_x >= hole_x1) & (kp_x < hole_x2)
+    ).any(axis=0)
 
-    # A keypoint is valid if it's not inside any hole
-    valid_keypoints = ~np.any(inside_hole, axis=1)
-
-    # Return filtered keypoints with same dtype as input
-    result = keypoints[valid_keypoints]
-    if len(result) == 0:
-        # Ensure empty result has correct shape and dtype
-        return np.array([], dtype=keypoints.dtype).reshape(0, keypoints.shape[1])
+    # Extract valid keypoints that are not inside any hole
+    result = keypoints[~inside_hole]
+    if result.size == 0:
+        return np.empty((0, keypoints.shape[1]), dtype=keypoints.dtype)
+    
     return result
 
 
