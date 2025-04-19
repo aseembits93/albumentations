@@ -70,10 +70,22 @@ class MinMaxScaler(BaseScaler):
                 "Call 'fit' with appropriate arguments before using this estimator.",
             )
 
-        x_std = np.subtract(x, self.data_min).astype(float)
-        np.divide(x_std, self.data_range, out=x_std)
-        np.multiply(x_std, (self.max - self.min), out=x_std)
-        np.add(x_std, self.min, out=x_std)
+        # 1) allocate one float buffer (same shape as x)
+        x_std = np.empty_like(x, dtype=float)
+
+        # 2) subtract data_min    => x_std = x - data_min
+        np.subtract(x, self.data_min, out=x_std)
+
+        # 3) scale into [0, 1] by multiplying with reciprocal of data_range
+        inv_range = 1.0 / self.data_range
+        np.multiply(x_std, inv_range, out=x_std)
+
+        # 4) expand to desired feature_range [min, max]
+        scale = self.max - self.min
+        if scale != 1.0:
+            np.multiply(x_std, scale, out=x_std)
+        if self.min != 0.0:
+            np.add(x_std, self.min, out=x_std)
 
         return x_std
 
