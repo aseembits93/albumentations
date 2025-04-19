@@ -125,9 +125,8 @@ def crop3d(
         np.ndarray: Cropped volume with same number of dimensions as input
 
     """
-    z_min, z_max, y_min, y_max, x_min, x_max = crop_coords
-
-    return volume[z_min:z_max, y_min:y_max, x_min:x_max]
+    # Perform the cropping directly using unpacked coordinates 
+    return volume[crop_coords[0]:crop_coords[1], crop_coords[2]:crop_coords[3], crop_coords[4]:crop_coords[5]] 
 
 
 def cutout3d(volume: np.ndarray, holes: np.ndarray, fill_value: tuple[float, ...] | float) -> np.ndarray:
