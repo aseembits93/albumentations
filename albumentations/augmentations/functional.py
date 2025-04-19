@@ -1086,24 +1086,24 @@ def add_shadow(
 
     img_shadowed = img.copy()
 
-    # Iterate over the vertices and intensity list
+    # Optimize the loop: avoid np.repeat and process all channels at once
+    h, w = img.shape[:2]
     for vertices, shadow_intensity in zip(vertices_list, intensities):
-        # Create mask for the current shadow polygon
-        mask = np.zeros((img.shape[0], img.shape[1], 1), dtype=np.uint8)
-        cv2.fillPoly(mask, [vertices], (max_value,))
+        # Create mask for the current shadow polygon (single channel)
+        mask = np.zeros((h, w), dtype=np.bool_)
+        cv2.fillPoly(mask.view(np.uint8), [vertices], 1)  # use 1 for boolean mask
 
-        # Duplicate the mask to have the same number of channels as the image
-        mask = np.repeat(mask, num_channels, axis=2)
-
-        # Apply shadow to the channels directly
-        # It could be tempting to convert to HLS and apply the shadow to the L channel, but it creates artifacts
-        shadowed_indices = mask[:, :, 0] == max_value
         darkness = 1 - shadow_intensity
-        img_shadowed[shadowed_indices] = clip(
-            img_shadowed[shadowed_indices] * darkness,
-            np.uint8,
-            inplace=True,
-        )
+        if num_channels == 1:
+            # Single channel case: mask directly
+            sub_img = img_shadowed[:, :]
+            # Only operate where mask is set
+            sub_img[mask] = clip(sub_img[mask] * darkness, np.uint8, inplace=True)
+        else:
+            # Multi-channel: slice all channels at once for masked positions
+            for ch in range(num_channels):
+                sub_img = img_shadowed[:, :, ch]
+                sub_img[mask] = clip(sub_img[mask] * darkness, np.uint8, inplace=True)
 
     return img_shadowed
 
