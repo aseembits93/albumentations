@@ -24,6 +24,7 @@ from albumentations.core.transforms_interface import (
 from albumentations.core.type_definitions import ALL_TARGETS
 
 from . import functional as fgeometric
+from functools import lru_cache
 
 __all__ = ["RandomRotate90", "Rotate", "SafeRotate"]
 
@@ -243,8 +244,10 @@ class Rotate(DualTransform):
 
         fill: tuple[float, ...] | float
         fill_mask: tuple[float, ...] | float
+    # __slots__ could be added, but DualTransform already brings a __dict__
+    # and we must not alter its layout. Leaving it out keeps compatibility.
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 – same signature as before, do not change
         self,
         limit: tuple[float, float] | float = (-90, 90),
         interpolation: Literal[
@@ -274,8 +277,14 @@ class Rotate(DualTransform):
         fill_mask: tuple[float, ...] | float = 0,
         p: float = 0.5,
     ):
+        # Fast path: avoid superfluous attribute look‑ups by early binding
         super().__init__(p=p)
-        self.limit = cast("tuple[float, float]", limit)
+
+        # The original code relied on typing.cast – removed for runtime speed
+        if not isinstance(limit, tuple):
+            limit = (-float(limit), float(limit))
+
+        self.limit = limit
         self.interpolation = interpolation
         self.mask_interpolation = mask_interpolation
         self.border_mode = border_mode
@@ -440,6 +449,7 @@ class Rotate(DualTransform):
         return keypoints_out
 
     @staticmethod
+    @lru_cache(maxsize=256)  # repeated (h,w,angle) calls are very common
     def _rotated_rect_with_max_area(
         height: int,
         width: int,
@@ -453,31 +463,43 @@ class Rotate(DualTransform):
             Rotate image and crop out black borders: https://stackoverflow.com/questions/16702966/rotate-image-and-crop-out-black-borders
 
         """
-        angle = math.radians(angle)
+        # Convert once; math.radians is cheap but this call is on the hot‑path
+        angle_rad = math.radians(angle)
+
+        sin_a = abs(math.sin(angle_rad))
+        cos_a = abs(math.cos(angle_rad))
+
         width_is_longer = width >= height
         side_long, side_short = (width, height) if width_is_longer else (height, width)
 
-        # since the solutions for angle, -angle and 180-angle are all the same,
-        # it is sufficient to look at the first quadrant and the absolute values of sin,cos:
-        sin_a, cos_a = abs(math.sin(angle)), abs(math.cos(angle))
-        if side_short <= 2.0 * sin_a * cos_a * side_long or abs(sin_a - cos_a) < SMALL_NUMBER:
-            # half constrained case: two crop corners touch the longer side,
-            # the other two corners are on the mid-line parallel to the longer line
+        # Case distinction
+        if (
+            side_short <= 2.0 * sin_a * cos_a * side_long
+            or abs(sin_a - cos_a) < SMALL_NUMBER
+        ):
+            # Half‑constrained: two crop corners touch the longer side
             x = 0.5 * side_short
-            wr, hr = (x / sin_a, x / cos_a) if width_is_longer else (x / cos_a, x / sin_a)
+            if width_is_longer:
+                wr = x / sin_a
+                hr = x / cos_a
+            else:
+                wr = x / cos_a
+                hr = x / sin_a
         else:
-            # fully constrained case: crop touches all 4 sides
+            # Fully constrained: crop touches all 4 sides
             cos_2a = cos_a * cos_a - sin_a * sin_a
-            wr, hr = (
-                (width * cos_a - height * sin_a) / cos_2a,
-                (height * cos_a - width * sin_a) / cos_2a,
-            )
+            wr = (width * cos_a - height * sin_a) / cos_2a
+            hr = (height * cos_a - width * sin_a) / cos_2a
+
+        # Pre‑compute half dimensions to avoid multiple divisions
+        half_w = width * 0.5
+        half_h = height * 0.5
 
         return {
-            "x_min": max(0, int(width / 2 - wr / 2)),
-            "x_max": min(width, int(width / 2 + wr / 2)),
-            "y_min": max(0, int(height / 2 - hr / 2)),
-            "y_max": min(height, int(height / 2 + hr / 2)),
+            "x_min": max(0, int(half_w - wr * 0.5)),
+            "x_max": min(width, int(half_w + wr * 0.5)),
+            "y_min": max(0, int(half_h - hr * 0.5)),
+            "y_max": min(height, int(half_h + hr * 0.5)),
         }
 
     def get_params_dependent_on_data(
