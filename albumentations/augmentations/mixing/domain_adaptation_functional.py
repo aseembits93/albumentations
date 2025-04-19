@@ -379,18 +379,21 @@ def apply_histogram(img: np.ndarray, reference_image: np.ndarray, blend_ratio: f
           the valid range and maintains the original number of dimensions.
 
     """
-    # Resize reference image only if necessary
+    # Resize reference if needed
     if img.shape[:2] != reference_image.shape[:2]:
-        reference_image = cv2.resize(reference_image, dsize=(img.shape[1], img.shape[0]))
+        reference_image = cv2.resize(
+            reference_image,
+            dsize=(img.shape[1], img.shape[0])
+        )
 
     img = np.squeeze(img)
     reference_image = np.squeeze(reference_image)
 
-    # Match histograms between the images
+    # Fast per‐channel histogram match
     matched = match_histograms(img, reference_image)
 
-    # Blend the original image and the matched image
-    return add_weighted(matched, blend_ratio, img, 1 - blend_ratio)
+    # Blend matched & original
+    return add_weighted(matched, blend_ratio, img, 1.0 - blend_ratio)
 
 
 @uint8_io
@@ -413,26 +416,34 @@ def match_histograms(image: np.ndarray, reference: np.ndarray) -> np.ndarray:
         ValueError: Thrown when the number of channels in the input image and the reference differ.
 
     """
+    # Ensure uint8 input for LUT indexing
     if reference.dtype != np.uint8:
         reference = from_float(reference, np.uint8)
 
     if image.ndim != reference.ndim:
         raise ValueError("Image and reference must have the same number of dimensions.")
 
-    # Expand dimensions for grayscale images
+    # Expand grayscale to a single‐channel 3D array so we can loop uniformly
+    gray = False
     if image.ndim == 2:
-        image = np.expand_dims(image, axis=-1)
-    if reference.ndim == 2:
-        reference = np.expand_dims(reference, axis=-1)
+        gray = True
+        image = image[..., None]
+        reference = reference[..., None]
 
-    matched = np.empty(image.shape, dtype=np.uint8)
+    matched = np.empty_like(image, dtype=np.uint8)
+    num_ch = image.shape[-1]
 
-    num_channels = image.shape[-1]
+    # Build per‐channel LUT and apply via cv2.LUT
+    for c in range(num_ch):
+        src_ch = image[..., c]
+        ref_ch = reference[..., c]
+        lut = _build_lut(src_ch, ref_ch)       # 256‐entry uint8 LUT
+        # cv2.LUT is pure C and very fast
+        matched[..., c] = cv2.LUT(src_ch, lut)
 
-    for channel in range(num_channels):
-        matched_channel = _match_cumulative_cdf(image[..., channel], reference[..., channel]).astype(np.uint8)
-        matched[..., channel] = matched_channel
-
+    # If original was gray, squeeze back to 2D
+    if gray:
+        matched = matched[..., 0]
     return matched
 
 
@@ -451,3 +462,31 @@ def _match_cumulative_cdf(source: np.ndarray, template: np.ndarray) -> np.ndarra
 
     interp_a_values = np.interp(src_quantiles, tmpl_quantiles, tmpl_values)
     return interp_a_values[src_lookup].reshape(source.shape).astype(np.uint8)
+
+
+def _build_lut(
+    src_channel: np.ndarray,
+    ref_channel: np.ndarray
+) -> np.ndarray:
+    """
+    Build a 256‐entry look‐up table that maps each uint8 intensity in src_channel
+    to a new uint8 intensity so that the cumulative histogram of src matches ref.
+    """
+    # Compute histograms (length‐256) with a single pass over each channel:
+    src_counts = np.bincount(src_channel.ravel(), minlength=256)
+    ref_counts = np.bincount(ref_channel.ravel(), minlength=256)
+
+    # Normalize cumulative histograms to [0,1]:
+    src_cdf = src_counts.cumsum()
+    src_cdf = src_cdf / src_cdf[-1]
+
+    # Only use intensities that actually occur in the reference
+    ref_nonzero = ref_counts > 0
+    ref_values = np.nonzero(ref_nonzero)[0]
+    ref_cdf = ref_counts[ref_nonzero].cumsum()
+    ref_cdf = ref_cdf / ref_cdf[-1]
+
+    # Linearly interpolate to get the new intensity for each src bin:
+    #   lut[i] = new intensity for original intensity i
+    lut = np.interp(src_cdf, ref_cdf, ref_values).astype(np.uint8)
+    return lut
