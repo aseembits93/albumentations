@@ -55,6 +55,7 @@ class MinMaxScaler(BaseScaler):
         self.min: float = feature_range[0]
         self.max: float = feature_range[1]
         self.data_range: np.ndarray | None = None
+        self.range_diff: float = self.max - self.min  # Cached difference between max and min for calculation
 
     def fit(self, x: np.ndarray) -> None:
         self.data_min = np.min(x, axis=0)
@@ -83,8 +84,13 @@ class MinMaxScaler(BaseScaler):
                 "This MinMaxScaler instance is not fitted yet. "
                 "Call 'fit' with appropriate arguments before using this estimator.",
             )
-        x_std = ((x - self.min) / (self.max - self.min)).astype(float)
-        return x_std * self.data_range + self.data_min
+        # Perform operations in place and use cached values
+        x_std = np.empty_like(x, dtype=float)
+        np.subtract(x, self.min, out=x_std)
+        np.divide(x_std, self.range_diff, out=x_std)
+        np.multiply(x_std, self.data_range, out=x_std)
+        np.add(x_std, self.data_min, out=x_std)
+        return x_std
 
 
 class StandardScaler(BaseScaler):
