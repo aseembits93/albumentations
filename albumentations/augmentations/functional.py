@@ -747,38 +747,47 @@ def add_rain(
     rain_drops: np.ndarray,
 ) -> np.ndarray:
     """Optimized version using OpenCV line drawing."""
-    if not rain_drops.size:
+    # Early return if no drops; do NOT copy the image if not needed
+    if rain_drops.size == 0:
         return img.copy()
-
-    img = img.copy()
-
-    # Pre-allocate rain layer
+    
+    # Minimize copies: draw over a new rain_layer, add to input inplace
     rain_layer = np.zeros_like(img, dtype=np.uint8)
 
-    # Calculate end points correctly
-    end_points = rain_drops + np.array([[slant, drop_length]])  # This creates correct shape
+    # Precompute end points once with out allocation:
+    # rain_drops: (N,2), so make (N,2) array for deltas, then add:
+    deltas = np.empty_like(rain_drops, dtype=rain_drops.dtype)
+    deltas[:, 0] = slant
+    deltas[:, 1] = drop_length
+    end_points = rain_drops + deltas
 
-    # Stack arrays properly - both must be same shape arrays
-    lines = np.stack((rain_drops, end_points), axis=1)  # Use tuple and proper axis
+    # Stack [ [start0, end0], [start1, end1], ... ]
+    lines = np.concatenate((rain_drops[:, None, :], end_points[:, None, :]), axis=1)
+    # lines: shape (N,2,2)
 
+    # Draw all lines in one go (much faster than iterating per line)
     cv2.polylines(
         rain_layer,
         lines.astype(np.int32),
-        False,
-        drop_color,
-        drop_width,
+        isClosed=False,
+        color=drop_color,
+        thickness=drop_width,
         lineType=cv2.LINE_4,
     )
 
+    # Blur only if needed
     if blur_value > 1:
         cv2.blur(rain_layer, (blur_value, blur_value), dst=rain_layer)
 
-    cv2.add(img, rain_layer, dst=img)
+    # Add rain layer to original img, output into a new array if necessary
+    out = img.copy()
+    cv2.add(out, rain_layer, dst=out)
 
+    # Brightness adjustment in-place if needed (OpenCV is fast here)
     if brightness_coefficient != 1.0:
-        cv2.multiply(img, brightness_coefficient, dst=img, dtype=cv2.CV_8U)
+        cv2.multiply(out, brightness_coefficient, dst=out, dtype=cv2.CV_8U)
 
-    return img
+    return out
 
 
 def get_fog_particle_radiuses(
