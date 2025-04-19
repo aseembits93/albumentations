@@ -293,22 +293,19 @@ def keypoints_rot90(
         np.ndarray: Rotated keypoints with same shape as input.
 
     """
-    if k == 0 or len(keypoints) == 0:
+    if k == 0 or keypoints.size == 0:
         return keypoints
 
-    # Normalize factor to range [0, 3]
-    k = ((k % 4) + 4) % 4
-
+    k = k % 4
+    if k == 0:
+        return keypoints
+    
     result = keypoints.copy()
-
-    # Get dimensions for the rotation axes
     dims = [volume_shape[ax] for ax in axes]
 
-    # Get coordinates to rotate
     coords1 = result[:, axes[0]].copy()
     coords2 = result[:, axes[1]].copy()
 
-    # Apply rotation based on factor (counterclockwise)
     if k == 1:  # 90 degrees CCW
         result[:, axes[0]] = (dims[1] - 1) - coords2
         result[:, axes[1]] = coords1
@@ -343,51 +340,33 @@ def transform_cube_keypoints(
     if not (0 <= index < 48):
         raise ValueError("Index must be between 0 and 47")
 
-    # Create working copy preserving all columns
     working_points = keypoints.copy()
-
-    # Convert only XYZ coordinates to HWD, keeping other columns unchanged
-    xyz = working_points[:, :3]  # Get first 3 columns (XYZ)
-    xyz = xyz[:, [2, 1, 0]]  # XYZ -> HWD
-    working_points[:, :3] = xyz  # Put back transformed coordinates
+    working_points[:, [0, 2]] = working_points[:, [2, 0]]
 
     current_shape = volume_shape
 
-    # Handle reflection first (indices 24-47)
     if index >= 24:
-        working_points[:, 2] = current_shape[2] - 1 - working_points[:, 2]  # Reflect W axis
+        working_points[:, 2] = current_shape[2] - 1 - working_points[:, 2]
 
     rotation_index = index % 24
 
-    # Apply the same rotation logic as transform_cube
     if rotation_index < 4:
-        # First 4: rotate around axis 0
         result = keypoints_rot90(working_points, k=rotation_index, axes=(1, 2), volume_shape=current_shape)
     elif rotation_index < 8:
-        # Next 4: flip 180° about axis 1, then rotate around axis 0
-        temp = keypoints_rot90(working_points, k=2, axes=(0, 2), volume_shape=current_shape)
-        result = keypoints_rot90(temp, k=rotation_index - 4, axes=(1, 2), volume_shape=volume_shape)
+        result = keypoints_rot90(keypoints_rot90(working_points, k=2, axes=(0, 2), volume_shape=current_shape), k=rotation_index - 4, axes=(1, 2), volume_shape=volume_shape)
     elif rotation_index < 16:
+        temp_shape = (current_shape[2], current_shape[1], current_shape[0])
         if rotation_index < 12:
-            temp = keypoints_rot90(working_points, k=1, axes=(0, 2), volume_shape=current_shape)
-            temp_shape = (current_shape[2], current_shape[1], current_shape[0])
-            result = keypoints_rot90(temp, k=rotation_index - 8, axes=(0, 1), volume_shape=temp_shape)
+            result = keypoints_rot90(keypoints_rot90(working_points, k=1, axes=(0, 2), volume_shape=current_shape), k=rotation_index - 8, axes=(0, 1), volume_shape=temp_shape)
         else:
-            temp = keypoints_rot90(working_points, k=3, axes=(0, 2), volume_shape=current_shape)
-            temp_shape = (current_shape[2], current_shape[1], current_shape[0])
-            result = keypoints_rot90(temp, k=rotation_index - 12, axes=(0, 1), volume_shape=temp_shape)
-    elif rotation_index < 20:
-        temp = keypoints_rot90(working_points, k=1, axes=(0, 1), volume_shape=current_shape)
-        temp_shape = (current_shape[1], current_shape[0], current_shape[2])
-        result = keypoints_rot90(temp, k=rotation_index - 16, axes=(0, 2), volume_shape=temp_shape)
+            result = keypoints_rot90(keypoints_rot90(working_points, k=3, axes=(0, 2), volume_shape=current_shape), k=rotation_index - 12, axes=(0, 1), volume_shape=temp_shape)
     else:
-        temp = keypoints_rot90(working_points, k=3, axes=(0, 1), volume_shape=current_shape)
         temp_shape = (current_shape[1], current_shape[0], current_shape[2])
-        result = keypoints_rot90(temp, k=rotation_index - 20, axes=(0, 2), volume_shape=temp_shape)
+        if rotation_index < 20:
+            result = keypoints_rot90(keypoints_rot90(working_points, k=1, axes=(0, 1), volume_shape=current_shape), k=rotation_index - 16, axes=(0, 2), volume_shape=temp_shape)
+        else:
+            result = keypoints_rot90(keypoints_rot90(working_points, k=3, axes=(0, 1), volume_shape=current_shape), k=rotation_index - 20, axes=(0, 2), volume_shape=temp_shape)
 
-    # Convert back from HWD to XYZ coordinates for first 3 columns only
-    xyz = result[:, :3]
-    xyz = xyz[:, [2, 1, 0]]  # HWD -> XYZ
-    result[:, :3] = xyz
+    result[:, [0, 2]] = result[:, [2, 0]]
 
     return result
