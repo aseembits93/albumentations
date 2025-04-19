@@ -137,23 +137,38 @@ def bboxes_d4(
         ValueError: If an invalid group member is specified.
 
     """
-    transformations = {
-        "e": lambda x: x,  # Identity transformation
-        "r90": lambda x: bboxes_rot90(x, 1),  # Rotate 90 degrees
-        "r180": lambda x: bboxes_rot90(x, 2),  # Rotate 180 degrees
-        "r270": lambda x: bboxes_rot90(x, 3),  # Rotate 270 degrees
-        "v": lambda x: bboxes_vflip(x),  # Vertical flip
-        "hvt": lambda x: bboxes_transpose(
-            bboxes_rot90(x, 2),
-        ),  # Reflect over anti-diagonal
-        "h": lambda x: bboxes_hflip(x),  # Horizontal flip
-        "t": lambda x: bboxes_transpose(x),  # Transpose (reflect over main diagonal)
-    }
+    # Replaced dictionary lookup with if/elif/else for direct dispatch.
+    # This avoids the overhead of dictionary access and lambda function calls,
+    # potentially speeding up execution when this function is called frequently.
+    if group_member == "e":
+        # Identity transformation - return input directly, no operation needed.
+        return bboxes
+    if group_member == "r90":
+        # Rotate 90 degrees
+        return bboxes_rot90(bboxes, 1)
+    if group_member == "r180":
+        # Rotate 180 degrees
+        # Using integer literal 2 directly as in original logic derived from lambda
+        return bboxes_rot90(bboxes, 2)
+    if group_member == "r270":
+        # Rotate 270 degrees
+        # Using integer literal 3 directly as in original logic derived from lambda
+        return bboxes_rot90(bboxes, 3)
+    if group_member == "v":
+        # Vertical flip
+        return bboxes_vflip(bboxes)
+    if group_member == "hvt":
+        # Reflect over anti-diagonal (equivalent to transpose(rot180(x)))
+        # Using integer literal 2 directly as in original logic derived from lambda
+        return bboxes_transpose(bboxes_rot90(bboxes, 2))
+    if group_member == "h":
+        # Horizontal flip
+        return bboxes_hflip(bboxes)
+    if group_member == "t":
+        # Transpose (reflect over main diagonal)
+        return bboxes_transpose(bboxes)
 
-    # Execute the appropriate transformation
-    if group_member in transformations:
-        return transformations[group_member](bboxes)
-
+    # If group_member doesn't match any known transformation, raise an error.
     raise ValueError(f"Invalid group member: {group_member}")
 
 
