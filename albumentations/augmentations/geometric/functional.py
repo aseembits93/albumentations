@@ -272,13 +272,8 @@ def resize(
     if target_shape == img.shape[:2]:
         return img
 
-    height, width = target_shape[:2]
-    resize_fn = maybe_process_in_chunks(
-        cv2.resize,
-        dsize=(width, height),
-        interpolation=interpolation,
-    )
-    return resize_fn(img)
+    # Directly call cv2.resize for potentially faster execution
+    return cv2.resize(img, (target_shape[1], target_shape[0]), interpolation=interpolation)
 
 
 @preserve_channel_dim
