@@ -627,27 +627,28 @@ def label(mask: np.ndarray, return_num: bool = False, connectivity: int = 2) -> 
         assigned the same integer value. If return_num is True, it also returns the number of labels.
 
     """
-    # Create a copy of the original mask
-    labeled = np.zeros_like(mask, dtype=np.int32)
+    # Use int32 directly for creating the labeled array (avoid dtype conversion)
+    labeled = np.zeros(mask.shape, dtype=np.int32)
 
     # Get unique non-zero values from the original mask
     unique_values = np.unique(mask[mask != 0])
 
-    # Label each unique value separately
+    # Set connectivity for OpenCV (4 or 8)
+    cv2_connectivity = 4 if connectivity == 1 else 8
+
+    # Begin labeling process from 1
     next_label = 1
+
     for value in unique_values:
+        # Create a binary mask for the current unique value
         binary_mask = (mask == value).astype(np.uint8)
 
-        # Set connectivity for OpenCV (4 or 8)
-        cv2_connectivity = 4 if connectivity == 1 else 8
-
-        # Use OpenCV's connectedComponents
+        # Apply OpenCV's connectedComponents to label the binary mask
         num_labels, labels = cv2.connectedComponents(binary_mask, connectivity=cv2_connectivity)
 
-        # Assign new labels
-        for i in range(1, num_labels):
-            labeled[labels == i] = next_label
-            next_label += 1
+        # Relabel the regions in the new mask directly
+        labeled[labels > 0] = labels[labels > 0] + next_label - 1
+        next_label += (num_labels - 1)
 
     num_labels = next_label - 1
 
