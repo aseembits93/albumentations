@@ -413,26 +413,30 @@ def match_histograms(image: np.ndarray, reference: np.ndarray) -> np.ndarray:
         ValueError: Thrown when the number of channels in the input image and the reference differ.
 
     """
+    # ensure reference is uint8
     if reference.dtype != np.uint8:
         reference = from_float(reference, np.uint8)
 
+    # dims must match
     if image.ndim != reference.ndim:
         raise ValueError("Image and reference must have the same number of dimensions.")
 
-    # Expand dimensions for grayscale images
+    # expand gray to shape (H, W, 1)
     if image.ndim == 2:
-        image = np.expand_dims(image, axis=-1)
+        image = image[..., None]
     if reference.ndim == 2:
-        reference = np.expand_dims(reference, axis=-1)
+        reference = reference[..., None]
 
-    matched = np.empty(image.shape, dtype=np.uint8)
-
+    # prepare output
+    matched = np.empty_like(image, dtype=np.uint8)
     num_channels = image.shape[-1]
 
-    for channel in range(num_channels):
-        matched_channel = _match_cumulative_cdf(image[..., channel], reference[..., channel]).astype(np.uint8)
-        matched[..., channel] = matched_channel
+    # process each channel independently
+    for c in range(num_channels):
+        matched[..., c] = _match_cumulative_cdf_fast(image[..., c],
+                                                     reference[..., c])
 
+    # returns uint8 with same channel‐dimension handling as before
     return matched
 
 
@@ -451,3 +455,28 @@ def _match_cumulative_cdf(source: np.ndarray, template: np.ndarray) -> np.ndarra
 
     interp_a_values = np.interp(src_quantiles, tmpl_quantiles, tmpl_values)
     return interp_a_values[src_lookup].reshape(source.shape).astype(np.uint8)
+
+
+def _match_cumulative_cdf_fast(source: np.ndarray,
+                                template: np.ndarray) -> np.ndarray:
+    """Fast per-channel histogram match via 256‑bin CDF + lookup table."""
+    # flatten pixel values
+    src_flat = source.ravel()
+    tmpl_flat = template.ravel()
+
+    # count occurrences for all 256 bins
+    src_counts = np.bincount(src_flat, minlength=256)
+    tmpl_counts = np.bincount(tmpl_flat, minlength=256)
+
+    # compute normalized CDFs
+    src_cdf = src_counts.cumsum(dtype=np.float64)
+    src_cdf /= src_cdf[-1]
+    tmpl_cdf = tmpl_counts.cumsum(dtype=np.float64)
+    tmpl_cdf /= tmpl_cdf[-1]
+
+    # build intensity mapping via interpolation over 256 levels
+    # mapping[i] = template intensity that matches src CDF at i
+    mapping = np.interp(src_cdf, tmpl_cdf, np.arange(256)).astype(np.uint8)
+
+    # apply lookup table
+    return mapping[src_flat].reshape(source.shape)
