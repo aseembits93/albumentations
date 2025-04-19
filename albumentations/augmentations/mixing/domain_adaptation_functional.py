@@ -437,17 +437,19 @@ def match_histograms(image: np.ndarray, reference: np.ndarray) -> np.ndarray:
 
 
 def _match_cumulative_cdf(source: np.ndarray, template: np.ndarray) -> np.ndarray:
-    src_lookup = source.reshape(-1)
-    src_counts = np.bincount(src_lookup)
-    tmpl_counts = np.bincount(template.reshape(-1))
+    src_lookup = source.ravel()
+    tmpl_lookup = template.ravel()
 
-    # omit values where the count was 0
+    src_counts = np.bincount(src_lookup, minlength=256)
+    tmpl_counts = np.bincount(tmpl_lookup, minlength=256)
+
+    # Omit values where the count was 0
     tmpl_values = np.nonzero(tmpl_counts)[0]
     tmpl_counts = tmpl_counts[tmpl_values]
 
-    # calculate normalized quantiles for each array
-    src_quantiles = np.cumsum(src_counts) / source.size
-    tmpl_quantiles = np.cumsum(tmpl_counts) / template.size
+    # Calculate normalized quantiles for each array
+    src_quantiles = np.cumsum(src_counts).astype(np.float64) / source.size
+    tmpl_quantiles = np.cumsum(tmpl_counts).astype(np.float64) / template.size
 
-    interp_a_values = np.interp(src_quantiles, tmpl_quantiles, tmpl_values)
-    return interp_a_values[src_lookup].reshape(source.shape).astype(np.uint8)
+    interp_a_values = np.interp(src_quantiles, tmpl_quantiles, tmpl_values).astype(np.uint8)
+    return interp_a_values[src_lookup].reshape(source.shape)
