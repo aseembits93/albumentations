@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import random
 from copy import deepcopy
-from typing import Any, Callable
+from typing import Dict, List, Any, Callable
 from warnings import warn
 
 import cv2
@@ -23,7 +23,7 @@ from albumentations.core.bbox_utils import BboxProcessor
 from albumentations.core.keypoints_utils import KeypointsProcessor
 from albumentations.core.validation import ValidatedTransformMeta
 
-from .serialization import Serializable, SerializableMeta, get_shortest_class_fullname
+from .serialization import shorten_class_name, Serializable, SerializableMeta, get_shortest_class_fullname
 from .type_definitions import ALL_TARGETS, Targets
 from .utils import ensure_contiguous_output, format_args
 
@@ -91,16 +91,18 @@ class BasicTransform(Serializable, metaclass=CombinedMeta):
 
     def __init__(self, p: float = 0.5):
         self.p = p
-        self._additional_targets: dict[str, str] = {}
-        self.params: dict[Any, Any] = {}
-        self._key2func = {}
+        self._additional_targets: Dict[str, str] = {}
+        self.params: Dict[Any, Any] = {}
         self._set_keys()
-        self.processors: dict[str, BboxProcessor | KeypointsProcessor] = {}
+        self.processors: Dict[str, BboxProcessor | KeypointsProcessor] = {}
         self.seed: int | None = None
         self.random_generator = np.random.default_rng(self.seed)
         self.py_random = random.Random(self.seed)
         self._strict = False  # Use private attribute
-        self.invalid_args: list[str] = []  # Store invalid args found during init
+        self.invalid_args: List[str] = []  # Store invalid args found during init
+
+        # Cache the class full name to avoid recomputation
+        self._class_fullname = shorten_class_name(f"{self.__class__.__module__}.{self.__class__.__name__}")
 
     @property
     def strict(self) -> bool:
@@ -481,7 +483,7 @@ class BasicTransform(Serializable, metaclass=CombinedMeta):
             str: The shortest class fullname.
 
         """
-        return get_shortest_class_fullname(cls)
+        return shorten_class_name(f"{cls.__module__}.{cls.__name__}")
 
     @classmethod
     def is_serializable(cls) -> bool:
