@@ -295,7 +295,8 @@ def _handle_mask(
 ) -> np.ndarray | None:
     if mask is None:
         return None
-    mask = mask.astype(np.uint8)
+    if not np.issubdtype(mask.dtype, np.uint8):
+        mask = mask.astype(np.uint8)
     if is_grayscale_image(mask) or i is None:
         return mask
 
