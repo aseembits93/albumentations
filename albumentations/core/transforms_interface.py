@@ -23,7 +23,7 @@ from albumentations.core.bbox_utils import BboxProcessor
 from albumentations.core.keypoints_utils import KeypointsProcessor
 from albumentations.core.validation import ValidatedTransformMeta
 
-from .serialization import Serializable, SerializableMeta, get_shortest_class_fullname
+from .serialization import shorten_class_name, Serializable, SerializableMeta, get_shortest_class_fullname
 from .type_definitions import ALL_TARGETS, Targets
 from .utils import ensure_contiguous_output, format_args
 
@@ -90,16 +90,19 @@ class BasicTransform(Serializable, metaclass=CombinedMeta):
         pass
 
     def __init__(self, p: float = 0.5):
+        # Initialize attributes
         self.p = p
         self._additional_targets: dict[str, str] = {}
         self.params: dict[Any, Any] = {}
-        self._key2func = {}
-        self._set_keys()
-        self.processors: dict[str, BboxProcessor | KeypointsProcessor] = {}
-        self.seed: int | None = None
+        self._key2func = {} # This is initialized here and then populated by _set_keys
+        self._set_keys() # Populate _available_keys and _key2func based on targets
+        self.processors: dict[str, BboxProcessor | KeypointsProcessor] = {} # Dictionary to store processors
+        self.seed: int | None = None # Seed for random number generators
+        # Initialize random generators immediately upon object creation
+        # This matches the original behavior, even if seed is None initially
         self.random_generator = np.random.default_rng(self.seed)
         self.py_random = random.Random(self.seed)
-        self._strict = False  # Use private attribute
+        self._strict = False  # Use private attribute for strict mode
         self.invalid_args: list[str] = []  # Store invalid args found during init
 
     @property
@@ -481,7 +484,9 @@ class BasicTransform(Serializable, metaclass=CombinedMeta):
             str: The shortest class fullname.
 
         """
-        return get_shortest_class_fullname(cls)
+        # Directly construct the full name and call the imported shorten_class_name
+        class_fullname = f"{cls.__module__}.{cls.__name__}"
+        return shorten_class_name(class_fullname)
 
     @classmethod
     def is_serializable(cls) -> bool:
