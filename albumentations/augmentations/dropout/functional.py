@@ -276,31 +276,31 @@ def resize_boxes_to_visible_area(
     hole_mask: np.ndarray,
 ) -> np.ndarray:
     """Resize boxes to their largest visible rectangular regions."""
-    # Extract box coordinates
+
+    # Extract box coordinates and convert to int
     x1 = boxes[:, 0].astype(int)
     y1 = boxes[:, 1].astype(int)
     x2 = boxes[:, 2].astype(int)
     y2 = boxes[:, 3].astype(int)
 
-    # Process each box individually to avoid array shape issues
-    new_boxes: list[np.ndarray] = []
-
-    regions = [hole_mask[y1[i] : y2[i], x1[i] : x2[i]] for i in range(len(boxes))]
-    visible_areas = [1 - region for region in regions]
-
-    for i, (visible, box) in enumerate(zip(visible_areas, boxes)):
-        if not visible.any():
+    new_boxes = []
+    # Precompute visible areas for all boxes and store their coordinates
+    for i in range(len(boxes)):
+        region = hole_mask[y1[i]:y2[i], x1[i]:x2[i]]
+        visible_area = 1 - region
+        
+        # If the visible area is empty, skip this box
+        if not visible_area.any():
             continue
 
         # Find visible coordinates
-        y_visible = visible.any(axis=1)
-        x_visible = visible.any(axis=0)
+        y_visible = visible_area.any(axis=1)
+        x_visible = visible_area.any(axis=0)
+        y_coords = np.where(y_visible)[0]
+        x_coords = np.where(x_visible)[0]
 
-        y_coords = np.nonzero(y_visible)[0]
-        x_coords = np.nonzero(x_visible)[0]
-
-        # Update only the coordinate part of the box
-        new_box = box.copy()
+        # Create the new box coordinates
+        new_box = boxes[i].copy()
         new_box[0] = x1[i] + x_coords[0]  # x_min
         new_box[1] = y1[i] + y_coords[0]  # y_min
         new_box[2] = x1[i] + x_coords[-1] + 1  # x_max
@@ -308,8 +308,7 @@ def resize_boxes_to_visible_area(
 
         new_boxes.append(new_box)
 
-        # Return empty array with correct shape if all boxes were removed
-
+    # Assemble the final result array and handle the case when all boxes were removed
     return np.array(new_boxes) if new_boxes else np.zeros((0, boxes.shape[1]), dtype=boxes.dtype)
 
 
