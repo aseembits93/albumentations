@@ -276,41 +276,101 @@ def resize_boxes_to_visible_area(
     hole_mask: np.ndarray,
 ) -> np.ndarray:
     """Resize boxes to their largest visible rectangular regions."""
-    # Extract box coordinates
-    x1 = boxes[:, 0].astype(int)
-    y1 = boxes[:, 1].astype(int)
-    x2 = boxes[:, 2].astype(int)
-    y2 = boxes[:, 3].astype(int)
+    # Ensure hole_mask is boolean for correct logical operations.
+    # Assuming non-zero values in the input mask represent holes.
+    # Convert to boolean True for holes, False for visible.
+    if hole_mask.dtype != bool:
+         hole_mask = hole_mask.astype(bool)
 
-    # Process each box individually to avoid array shape issues
-    new_boxes: list[np.ndarray] = []
+    # Calculate the 'is_visible' mask once. True means visible (no hole), False means covered by hole.
+    # This avoids repeated inversion for each box slice inside the loop.
+    is_visible = ~hole_mask
 
-    regions = [hole_mask[y1[i] : y2[i], x1[i] : x2[i]] for i in range(len(boxes))]
-    visible_areas = [1 - region for region in regions]
+    # Extract box coordinates into separate arrays once before the loop.
+    # Cast to int as coordinates represent pixel indices and are used for slicing.
+    x1s = boxes[:, 0].astype(int)
+    y1s = boxes[:, 1].astype(int)
+    x2s = boxes[:, 2].astype(int)
+    y2s = boxes[:, 3].astype(int)
 
-    for i, (visible, box) in enumerate(zip(visible_areas, boxes)):
-        if not visible.any():
-            continue
+    # Use a list to collect the new boxes. This is necessary because the number of
+    # output boxes may be less than the input boxes (if some are completely removed).
+    new_boxes_list: list[np.ndarray] = []
 
-        # Find visible coordinates
-        y_visible = visible.any(axis=1)
-        x_visible = visible.any(axis=0)
+    # Iterate through each box using its index.
+    # This structure avoids creating intermediate lists of slices for all boxes simultaneously,
+    # processing each box's slice sequentially.
+    for i in range(len(boxes)):
+        # Get coordinates for the current box.
+        x1, y1, x2, y2 = x1s[i], y1s[i], x2s[i], y2s[i]
 
-        y_coords = np.nonzero(y_visible)[0]
-        x_coords = np.nonzero(x_visible)[0]
+        # Defensive check for invalid box dimensions (e.g., width or height is zero or negative).
+        # This ensures slicing is valid. The handle_empty_array decorator handles the case
+        # where the initial `boxes` array is empty.
+        if y1 >= y2 or x1 >= x2:
+             continue # Skip boxes with invalid dimensions
 
-        # Update only the coordinate part of the box
-        new_box = box.copy()
-        new_box[0] = x1[i] + x_coords[0]  # x_min
-        new_box[1] = y1[i] + y_coords[0]  # y_min
-        new_box[2] = x1[i] + x_coords[-1] + 1  # x_max
-        new_box[3] = y1[i] + y_coords[-1] + 1  # y_max
+        # Get the slice of the 'is_visible' mask corresponding to the current box's boundaries.
+        # This slice contains True/False indicating visibility for pixels within this box.
+        visible_slice = is_visible[y1:y2, x1:x2]
 
-        new_boxes.append(new_box)
+        # Check if there is any visible pixel within this slice.
+        # If the slice contains only False values (i.e., the box area is entirely covered by a hole),
+        # this box is removed from the output.
+        if not visible_slice.any():
+            continue # Box is completely covered by a hole, skip it.
 
-        # Return empty array with correct shape if all boxes were removed
+        # Find rows within the slice that contain at least one visible pixel.
+        # `visible_slice.any(axis=1)` returns a 1D boolean array where element j is True
+        # if row j of `visible_slice` contains any True.
+        y_visible_in_slice = visible_slice.any(axis=1)
 
-    return np.array(new_boxes) if new_boxes else np.zeros((0, boxes.shape[1]), dtype=boxes.dtype)
+        # Find columns within the slice that contain at least one visible pixel.
+        # `visible_slice.any(axis=0)` returns a 1D boolean array where element k is True
+        # if column k of `visible_slice` contains any True.
+        x_visible_in_slice = visible_slice.any(axis=0)
+
+        # Find the indices of these visible rows and columns *within the slice*.
+        # np.nonzero(arr)[0] returns a 1D array containing the indices where `arr` is True.
+        y_coords_in_slice = np.nonzero(y_visible_in_slice)[0]
+        x_coords_in_slice = np.nonzero(x_visible_in_slice)[0]
+
+        # These indices (e.g., y_coords_in_slice) are relative to the top-left corner of the `visible_slice`.
+        # To get the corresponding coordinates in the original image, we add the original box's
+        # top-left coordinates (y1, x1) to these relative indices.
+
+        # Calculate the new minimum and maximum coordinates for the resized box.
+        # The smallest index in y_coords_in_slice corresponds to the first visible row *within the slice*.
+        # Adding y1 (the original box's top-left row) gives its global coordinate.
+        new_y1_global = y1 + y_coords_in_slice[0]
+        # The largest index in y_coords_in_slice corresponds to the last visible row *within the slice*.
+        # Adding y1 gives its global coordinate.
+        new_y2_global = y1 + y_coords_in_slice[-1]
+        # Similarly for x coordinates.
+        new_x1_global = x1 + x_coords_in_slice[0]
+        new_x2_global = x1 + x_coords_in_slice[-1]
+
+        # Create the new box array. It's important to copy the original box
+        # to preserve its dtype and any potential extra columns beyond the coordinates (x1, y1, x2, y2).
+        new_box = boxes[i].copy()
+
+        # Update the coordinates of the new box.
+        # Box formats are typically [x_min, y_min, x_max, y_max] where x_max and y_max
+        # are exclusive bounds (i.e., the pixel at x_max-1, y_max-1 is included).
+        # The calculated new_x2_global and new_y2_global are the indices of the *last* visible pixel.
+        # To get the exclusive bound, we add 1.
+        new_box[0] = new_x1_global               # x_min (inclusive)
+        new_box[1] = new_y1_global               # y_min (inclusive)
+        new_box[2] = new_x2_global + 1           # x_max (exclusive)
+        new_box[3] = new_y2_global + 1           # y_max (exclusive)
+
+        # Add the modified box to the list of results.
+        new_boxes_list.append(new_box)
+
+    # Convert the list of new boxes back to a NumPy array.
+    # If the list is empty (meaning all original boxes were removed), return an empty array
+    # with the correct shape (0, number of columns in original boxes) and data type.
+    return np.array(new_boxes_list, dtype=boxes.dtype) if new_boxes_list else np.zeros((0, boxes.shape[1]), dtype=boxes.dtype)
 
 
 def filter_bboxes_by_holes(
