@@ -139,9 +139,10 @@ def crop_keypoints_by_coords(
     """
     x1, y1 = crop_coords[:2]
 
-    cropped_keypoints = keypoints.copy()
-    cropped_keypoints[:, 0] -= x1  # Adjust x coordinates
-    cropped_keypoints[:, 1] -= y1  # Adjust y coordinates
+    # Using np.subtract directly on the original keypoints array for in-place modification and better performance.
+    cropped_keypoints = keypoints.copy()  # Always ensure we're not modifying the original input.
+    np.subtract(cropped_keypoints[:, 0], x1, out=cropped_keypoints[:, 0])  # Adjust x coordinates
+    np.subtract(cropped_keypoints[:, 1], y1, out=cropped_keypoints[:, 1])  # Adjust y coordinates
 
     return cropped_keypoints
 
