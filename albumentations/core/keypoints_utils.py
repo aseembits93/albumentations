@@ -45,6 +45,7 @@ def angle_to_2pi_range(angles: np.ndarray) -> np.ndarray:
         np.ndarray: Array of the same shape as input with angles normalized to [0, 2π).
 
     """
+    # np.mod is efficient for arrays, no significant optimization needed here.
     return np.mod(angles, 2 * np.pi)
 
 
@@ -288,42 +289,56 @@ def check_keypoints(keypoints: np.ndarray, shape: ShapeType) -> None:
     """
     height, width = shape["height"], shape["width"]
     has_depth = "depth" in shape
-
-    # Check x and y coordinates (always present)
-    x, y = keypoints[:, 0], keypoints[:, 1]
-    invalid_x = np.where((x < 0) | (x >= width))[0]
-    invalid_y = np.where((y < 0) | (y >= height))[0]
+    num_cols = keypoints.shape[1]
 
     error_messages = []
 
-    # Handle x, y errors
-    for idx in sorted(set(invalid_x) | set(invalid_y)):
-        if idx in invalid_x:
-            error_messages.append(
-                f"Expected x for keypoint {keypoints[idx]} to be in range [0, {width}), got {x[idx]}",
-            )
-        if idx in invalid_y:
-            error_messages.append(
-                f"Expected y for keypoint {keypoints[idx]} to be in range [0, {height}), got {y[idx]}",
-            )
+    # Use boolean masks to find invalid keypoints efficiently in a vectorized manner.
+    invalid_x_mask = (keypoints[:, 0] < 0) | (keypoints[:, 0] >= width)
+    invalid_y_mask = (keypoints[:, 1] < 0) | (keypoints[:, 1] >= height)
 
-    # Check z coordinates if depth is provided and keypoints have z
-    if has_depth and keypoints.shape[1] > 2:
+    overall_invalid_mask = invalid_x_mask | invalid_y_mask
+
+    invalid_z_mask = None
+    if has_depth and num_cols > 2:
         z = keypoints[:, 2]
         depth = shape["depth"]
-        invalid_z = np.where((z < 0) | (z >= depth))[0]
-        error_messages.extend(
-            f"Expected z for keypoint {keypoints[idx]} to be in range [0, {depth}), got {z[idx]}" for idx in invalid_z
-        )
+        invalid_z_mask = (z < 0) | (z >= depth)
+        overall_invalid_mask |= invalid_z_mask
 
-    # Check angles only if keypoints have angle column
-    if keypoints.shape[1] > 3:
+    invalid_angle_mask = None
+    if num_cols > 3:
         angles = keypoints[:, 3]
-        invalid_angles = np.where((angles < 0) | (angles >= 2 * math.pi))[0]
-        error_messages.extend(
-            f"Expected angle for keypoint {keypoints[idx]} to be in range [0, 2π), got {angles[idx]}"
-            for idx in invalid_angles
-        )
+        invalid_angle_mask = (angles < 0) | (angles >= 2 * math.pi)
+        overall_invalid_mask |= invalid_angle_mask
+
+    # Find the indices of all keypoints that are invalid for *any* reason.
+    # This avoids repeated calls to np.where and set operations used in the original code.
+    if np.any(overall_invalid_mask):
+        invalid_indices = np.where(overall_invalid_mask)[0]
+        # Sort indices for consistent error message order
+        invalid_indices.sort()
+
+        # Iterate through the identified invalid keypoints and generate specific messages.
+        # Checking the pre-computed masks is faster than re-evaluating conditions or searching sets.
+        for idx in invalid_indices:
+            if invalid_x_mask[idx]:
+                error_messages.append(
+                    f"Expected x for keypoint {keypoints[idx]} to be in range [0, {width}), got {keypoints[idx, 0]}",
+                )
+            if invalid_y_mask[idx]:
+                error_messages.append(
+                    f"Expected y for keypoint {keypoints[idx]} to be in range [0, {height}), got {keypoints[idx, 1]}",
+                )
+            if invalid_z_mask is not None and invalid_z_mask[idx]:
+                 error_messages.append(
+                    f"Expected z for keypoint {keypoints[idx]} to be in range [0, {depth}), got {keypoints[idx, 2]}"
+                 )
+            if invalid_angle_mask is not None and invalid_angle_mask[idx]:
+                 error_messages.append(
+                    f"Expected angle for keypoint {keypoints[idx]} to be in range [0, 2π), got {keypoints[idx, 3]}"
+                 )
+
 
     if error_messages:
         raise ValueError("\n".join(error_messages))
@@ -413,7 +428,10 @@ def convert_keypoints_to_albumentations(
     if source_format not in keypoint_formats:
         raise ValueError(f"Unknown source_format {source_format}. Supported formats are: {keypoint_formats}")
 
-    format_to_indices: dict[str, list[int | None]] = {
+    # Mapping from Albumentations format column index (0-4 for x, y, z, angle, scale)
+    # to the input keypoints column index, or None if not present in the source format.
+    # Note: NUM_KEYPOINTS_COLUMNS_IN_ALBUMENTATIONS is 5 (x, y, z, angle, scale).
+    format_to_albumentations_indices: dict[str, list[int | None]] = {
         "xy": [0, 1, None, None, None],
         "yx": [1, 0, None, None, None],
         "xya": [0, 1, None, 2, None],
@@ -423,23 +441,44 @@ def convert_keypoints_to_albumentations(
         "xyz": [0, 1, 2, None, None],
     }
 
-    indices: list[int | None] = format_to_indices[source_format]
+    input_indices_map: list[int | None] = format_to_albumentations_indices[source_format]
+    num_input_cols = len(source_format) # This is correct based on how additional columns are handled later.
+    N = keypoints.shape[0]
 
-    processed_keypoints = np.zeros((keypoints.shape[0], NUM_KEYPOINTS_COLUMNS_IN_ALBUMENTATIONS), dtype=np.float32)
+    # Create the base array for the 5 Albumentations columns. Initialize with zeros.
+    processed_keypoints_base = np.zeros((N, NUM_KEYPOINTS_COLUMNS_IN_ALBUMENTATIONS), dtype=np.float32)
 
-    for i, idx in enumerate(indices):
-        if idx is not None:
-            processed_keypoints[:, i] = keypoints[:, idx]
+    # Use vectorized assignment to populate the base columns.
+    # This replaces the explicit Python loop over columns in the original implementation.
+    # x (col 0)
+    processed_keypoints_base[:, 0] = keypoints[:, input_indices_map[0]]
+    # y (col 1)
+    processed_keypoints_base[:, 1] = keypoints[:, input_indices_map[1]]
 
-    if angle_in_degrees and indices[3] is not None:  # angle is now at index 3
-        processed_keypoints[:, 3] = np.radians(processed_keypoints[:, 3])
+    # z (col 2) - default is 0 from np.zeros
+    if input_indices_map[2] is not None:
+        processed_keypoints_base[:, 2] = keypoints[:, input_indices_map[2]]
 
-    processed_keypoints[:, 3] = angle_to_2pi_range(processed_keypoints[:, 3])  # angle is now at index 3
+    # angle (col 3) - default is 0 from np.zeros
+    if input_indices_map[3] is not None:
+        angle_col = keypoints[:, input_indices_map[3]]
+        if angle_in_degrees:
+            angle_col = np.radians(angle_col)
+        processed_keypoints_base[:, 3] = angle_to_2pi_range(angle_col)
 
-    if keypoints.shape[1] > len(source_format):
-        processed_keypoints = np.column_stack((processed_keypoints, keypoints[:, len(source_format) :]))
+    # scale (col 4) - default is 0 from np.zeros
+    if input_indices_map[4] is not None:
+        processed_keypoints_base[:, 4] = keypoints[:, input_indices_map[4]]
+
+    # Append any additional columns present in the input that are not part of the source_format.
+    if keypoints.shape[1] > num_input_cols:
+        additional_cols = keypoints[:, num_input_cols:]
+        processed_keypoints = np.column_stack((processed_keypoints_base, additional_cols))
+    else:
+        processed_keypoints = processed_keypoints_base
 
     if check_validity:
+        # This call benefits from the optimization made to check_keypoints
         check_keypoints(processed_keypoints, shape)
 
     return processed_keypoints
