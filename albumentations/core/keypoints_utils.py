@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Tuple, Any, Literal
 
 import numpy as np
 
@@ -291,39 +291,23 @@ def check_keypoints(keypoints: np.ndarray, shape: ShapeType) -> None:
 
     # Check x and y coordinates (always present)
     x, y = keypoints[:, 0], keypoints[:, 1]
-    invalid_x = np.where((x < 0) | (x >= width))[0]
-    invalid_y = np.where((y < 0) | (y >= height))[0]
+    invalid_x, x_errors = check_invalid_coordinates(x, width, "x")
+    invalid_y, y_errors = check_invalid_coordinates(y, height, "y")
 
-    error_messages = []
-
-    # Handle x, y errors
-    for idx in sorted(set(invalid_x) | set(invalid_y)):
-        if idx in invalid_x:
-            error_messages.append(
-                f"Expected x for keypoint {keypoints[idx]} to be in range [0, {width}), got {x[idx]}",
-            )
-        if idx in invalid_y:
-            error_messages.append(
-                f"Expected y for keypoint {keypoints[idx]} to be in range [0, {height}), got {y[idx]}",
-            )
+    error_messages = x_errors + y_errors
 
     # Check z coordinates if depth is provided and keypoints have z
     if has_depth and keypoints.shape[1] > 2:
         z = keypoints[:, 2]
         depth = shape["depth"]
-        invalid_z = np.where((z < 0) | (z >= depth))[0]
-        error_messages.extend(
-            f"Expected z for keypoint {keypoints[idx]} to be in range [0, {depth}), got {z[idx]}" for idx in invalid_z
-        )
+        _, z_errors = check_invalid_coordinates(z, depth, "z")
+        error_messages.extend(z_errors)
 
     # Check angles only if keypoints have angle column
     if keypoints.shape[1] > 3:
         angles = keypoints[:, 3]
         invalid_angles = np.where((angles < 0) | (angles >= 2 * math.pi))[0]
-        error_messages.extend(
-            f"Expected angle for keypoint {keypoints[idx]} to be in range [0, 2π), got {angles[idx]}"
-            for idx in invalid_angles
-        )
+        error_messages.extend([f"Expected angle for keypoint {keypoints[idx]} to be in range [0, 2π), got {angles[idx]}" for idx in invalid_angles])
 
     if error_messages:
         raise ValueError("\n".join(error_messages))
@@ -413,7 +397,7 @@ def convert_keypoints_to_albumentations(
     if source_format not in keypoint_formats:
         raise ValueError(f"Unknown source_format {source_format}. Supported formats are: {keypoint_formats}")
 
-    format_to_indices: dict[str, list[int | None]] = {
+    format_to_indices = {
         "xy": [0, 1, None, None, None],
         "yx": [1, 0, None, None, None],
         "xya": [0, 1, None, 2, None],
@@ -423,7 +407,7 @@ def convert_keypoints_to_albumentations(
         "xyz": [0, 1, 2, None, None],
     }
 
-    indices: list[int | None] = format_to_indices[source_format]
+    indices = format_to_indices[source_format]
 
     processed_keypoints = np.zeros((keypoints.shape[0], NUM_KEYPOINTS_COLUMNS_IN_ALBUMENTATIONS), dtype=np.float32)
 
@@ -434,10 +418,11 @@ def convert_keypoints_to_albumentations(
     if angle_in_degrees and indices[3] is not None:  # angle is now at index 3
         processed_keypoints[:, 3] = np.radians(processed_keypoints[:, 3])
 
-    processed_keypoints[:, 3] = angle_to_2pi_range(processed_keypoints[:, 3])  # angle is now at index 3
+    if indices[3] is not None:
+        processed_keypoints[:, 3] = angle_to_2pi_range(processed_keypoints[:, 3])  # angle is now at index 3
 
     if keypoints.shape[1] > len(source_format):
-        processed_keypoints = np.column_stack((processed_keypoints, keypoints[:, len(source_format) :]))
+        processed_keypoints = np.column_stack((processed_keypoints, keypoints[:, len(source_format):]))
 
     if check_validity:
         check_keypoints(processed_keypoints, shape)
@@ -519,3 +504,9 @@ def convert_keypoints_from_albumentations(
         return np.column_stack((result, keypoints[:, NUM_KEYPOINTS_COLUMNS_IN_ALBUMENTATIONS:]))
 
     return result
+
+def check_invalid_coordinates(coord: np.ndarray, limit: float, name: str) -> Tuple[np.ndarray, list[str]]:
+    """Helper function to check coordinates against a limit and return error messages."""
+    invalid = np.where((coord < 0) | (coord >= limit))[0]
+    error_msgs = [f"Expected {name} for keypoint {coord[invalid]} to be in range [0, {limit}), got {coord[idx]}" for idx in invalid]
+    return invalid, error_msgs
