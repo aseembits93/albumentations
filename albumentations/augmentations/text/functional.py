@@ -70,12 +70,15 @@ def swap_random_words(words: list[str], num_words: int, py_random: random.Random
     if num_words == 0 or len(words) < PAIR:
         return " ".join(words)
 
-    words = words.copy()
+    words_copy = words.copy()
+    length = len(words_copy)
+    range_indices = list(range(length))
+    sample_method = py_random.sample
 
     for _ in range(num_words):
-        idx1, idx2 = py_random.sample(range(len(words)), 2)
-        words[idx1], words[idx2] = words[idx2], words[idx1]
-    return " ".join(words)
+        idx1, idx2 = sample_method(range_indices, 2)
+        words_copy[idx1], words_copy[idx2] = words_copy[idx2], words_copy[idx1]
+    return " ".join(words_copy)
 
 
 def insert_random_stopwords(
