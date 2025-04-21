@@ -89,6 +89,14 @@ class KeypointParams(Params):
         self.remove_invisible = remove_invisible
         self.angle_in_degrees = angle_in_degrees
         self.check_each_transform = check_each_transform
+        # Combine all attributes into a dictionary to minimize repeated attribute access
+        self._all_params = {
+            "format": self.format,
+            "label_fields": self.label_fields,
+            "remove_invisible": self.remove_invisible,
+            "angle_in_degrees": self.angle_in_degrees,
+            "check_each_transform": self.check_each_transform
+        }
 
     def to_dict_private(self) -> dict[str, Any]:
         """Get the private dictionary representation of keypoint parameters.
@@ -97,15 +105,7 @@ class KeypointParams(Params):
             dict[str, Any]: Dictionary containing the keypoint parameters.
 
         """
-        data = super().to_dict_private()
-        data.update(
-            {
-                "remove_invisible": self.remove_invisible,
-                "angle_in_degrees": self.angle_in_degrees,
-                "check_each_transform": self.check_each_transform,
-            },
-        )
-        return data
+        return self._all_params.copy()  # Use cached combined dictionary for efficiency
 
     @classmethod
     def is_serializable(cls) -> bool:
