@@ -76,7 +76,6 @@ class KeypointParams(Params):
         z coordinate is set to 0. For formats without angle or scale, these values are set to 0.
 
     """
-
     def __init__(
         self,
         format: str,  # noqa: A002
@@ -97,15 +96,17 @@ class KeypointParams(Params):
             dict[str, Any]: Dictionary containing the keypoint parameters.
 
         """
-        data = super().to_dict_private()
-        data.update(
-            {
-                "remove_invisible": self.remove_invisible,
-                "angle_in_degrees": self.angle_in_degrees,
-                "check_each_transform": self.check_each_transform,
-            },
-        )
-        return data
+        # Optimized: Directly create the dictionary with all parameters.
+        # This avoids the overhead of calling the parent method to create a dictionary
+        # and then updating it, which involves more operations (method call, dictionary creation,
+        # dictionary update) compared to creating the final dictionary in one go.
+        return {
+            "format": self.format,
+            "label_fields": self.label_fields,
+            "remove_invisible": self.remove_invisible,
+            "angle_in_degrees": self.angle_in_degrees,
+            "check_each_transform": self.check_each_transform,
+        }
 
     @classmethod
     def is_serializable(cls) -> bool:
