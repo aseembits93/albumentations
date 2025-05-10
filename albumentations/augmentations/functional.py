@@ -458,17 +458,17 @@ def clahe(
         >>> assert result.shape == img.shape
         >>> assert result.dtype == img.dtype
     """
-    img = img.copy()
     clahe_mat = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
-
     if is_grayscale_image(img):
+        # No copy needed: img is unused after this, and CLAHE returns a new array
         return clahe_mat.apply(img)
 
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
-
-    img[:, :, 0] = clahe_mat.apply(img[:, :, 0])
-
-    return cv2.cvtColor(img, cv2.COLOR_LAB2RGB)
+    # Only copy when needed for color images, to avoid unnecessary memory allocation
+    lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
+    # work with a view, not a slice copy
+    l_channel = lab[:, :, 0]
+    lab[:, :, 0] = clahe_mat.apply(l_channel)
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
 
 
 @uint8_io
