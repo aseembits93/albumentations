@@ -590,11 +590,11 @@ def mask_dropout_keypoints(
             dropout_mask = np.any(dropout_mask, axis=-1)
         else:  # Shape is (C, H, W)
             dropout_mask = np.any(dropout_mask, axis=0)
-
-    # Get coordinates as integers
+    
+    # Convert coordinates to integers once
     coords = keypoints[:, :2].astype(int)
-
-    # Filter out keypoints that are outside the mask dimensions
+    
+    # Compute valid_mask in a single operation
     valid_mask = (
         (coords[:, 0] >= 0)
         & (coords[:, 0] < dropout_mask.shape[1])
@@ -602,10 +602,9 @@ def mask_dropout_keypoints(
         & (coords[:, 1] < dropout_mask.shape[0])
     )
 
-    # For valid keypoints, check if they fall on non-dropped pixels
-    if np.any(valid_mask):
-        valid_coords = coords[valid_mask]
-        valid_mask[valid_mask] = ~dropout_mask[valid_coords[:, 1], valid_coords[:, 0]]
+    # For valid keypoints, check if they fall on non-dropped pixels using advanced indexing
+    valid_coords = coords[valid_mask]
+    valid_mask[valid_mask] = ~dropout_mask[valid_coords[:, 1], valid_coords[:, 0]]
 
     return keypoints[valid_mask]
 
